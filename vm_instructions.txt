@@ -1,0 +1,965 @@
+/****************************************
+* Version: 3.5
+* Author: F9(@Farenain)
+* Date: 2018/05/01
+* Module: vm_disassembler.py
+*
+*   F9 Reversing Tools   ***
+* Genaytyk VM Decompiler ***
+****************************************/
+
+
+Interesting values of the VM:
+- Hardcoded String: aAb0cBd1eCf2gDh3jEk4lFm5nGp6qHr7sJt8uKv9w
+- MySerialHash Offset: 0x9b (then 0x93),0x9f (then 0x97),0xa3
+- Name offset: 0xbb
+- Serial offset: 0xe0
+- Name length offset: 0x105
+- Final comparation offset: 0x109
+- Hashed characters of Name: from 0x92 to 0x33
+- Hashed the prior characters in 32-bits: 0xa7
+- Hashed value from REG0x4 and REG0x8: 0xab, 0xaf
+
+
+
+00000000:	CALL CrackmeCheckeaDosGuionesCambialosPor0s	; checkea si hay dos guiones en el serial y cambialos por 0s
+
+00000005:	CMP DWORD(REG0x4) ,0xffffffffL 	; Checkea si la salida es -1
+			JZ  0x1f8						; si es así, salta a error
+
+-------------------------------------------------------------------------------------------------------------
+
+
+0000000f:	XOR DWORD(REG0xc) ,DWORD(REG0xc) 
+
+00000013:	MOV DWORD(REG0x1c) ,0xe0 		; Apunta al principio de la cadena de mi serial
+
+0000001a:	CALL CrackmeStrlen	; Mira la longitud de la cadena
+
+0000001f:	CMP DWORD(REG0x4) ,0x6 			; Compara si es igual a 6
+			JNZ  0x1f8 						; si no es así, salta a error
+
+00000029:	ADD DWORD(REG0x1c) ,0x7  		; Aumenta 7, al establecer los guiones a 0, se tuvieron que crear 3 cadenas
+											; de 6 caracteres, por tanto, sumando 7 apuntamos a la siguiente
+
+00000030:	INC DWORD(REG0xc) 				; aumentamos contador
+
+00000033:	CMP DWORD(REG0xc) ,0x3 			; miramos si el contador es igual a 3
+			JNZ  0x1a 						; si no hemos mirado la longitud de las 3 cadenas, mira la siguiente.
+
+
+-------------------------------------------------------------------------------------------------------------
+
+
+0000003d:	XOR DWORD(REG0xc) ,DWORD(REG0xc) 
+
+00000041:	MOV DWORD(REG0x1c) ,0xe0  		; Vuelve a apuntar al principio de mi serial
+
+00000048:	CALL CrackmeSetCharset 	; realiza el intercambio de caracter por su posición en cadena hardcodeada
+
+0000004d:	INC DWORD(REG0x1c)  			; incrementa, apuntando a la siguiente cadena
+
+00000050:	INC DWORD(REG0xc) 				; incrementa el contador
+
+00000053:	CMP DWORD(REG0xc) ,0x3 			; mira a ver si se realizó el intercambio en las 3 cadenas
+			JNZ  0x48
+
+
+-------------------------------------------------------------------------------------------------------------
+
+
+
+0000005d:	XOR DWORD(REG0xc) ,DWORD(REG0xc) 
+
+00000061:	MOV DWORD(REG0x1c) ,0xe0  		; apunta al principio de mi serial
+
+00000068:	MOV DWORD(REG0x8) ,0x9b  		; apunta a una zona vacía donde meterá el hash
+
+0000006f:	CALL CrackmeHasheaCadenaSerial 	; hashea la cadena en 32 bits y recupera el resultado
+
+00000074:	CMP DWORD(REG0x4) ,0xffffffffL
+			JZ  0x1f8
+
+0000007e:	MOV HardcodedString[DWORD(REG0x8)],DWORD(REG0x4) ; guarda el resultado, en una zona de memoria (SerialHash)
+
+00000082:	ADD DWORD(REG0x8) ,0x4  		; apunta a la siguiente zona de memoria
+
+00000089:	ADD DWORD(REG0x1c) ,0x7  		; apunta a la siguiente cadena
+
+00000090:	INC DWORD(REG0xc) 				; aumenta el contador
+
+00000093:	CMP DWORD(REG0xc) ,0x3 			; mira a ver si se hashearon las 3 cadenas
+			JNZ  0x6f 						; si no, sigue hasheando
+
+
+-------------------------------------------------------------------------------------------------------------
+
+
+0000009d:	MOV DWORD(REG0x24) ,HardcodedString[0x9b]	; obten el primer hash
+
+000000a3:	ROL DWORD(REG0x24) ,0x7 
+
+000000a7:	MOV HardcodedString[0x9b],DWORD(REG0x24) 	; guarda primer hash modificado
+
+000000ad:	MOV DWORD(REG0x24) ,HardcodedString[0x9f] 	; obten el segundo hash
+
+000000b3:	ROR DWORD(REG0x24) ,0x9 
+
+000000b7:	MOV HardcodedString[0x9f],DWORD(REG0x24) 	; guarda segundo hash modificado
+
+000000bd:	MOV DWORD(REG0x24) ,HardcodedString[0xa3]	; obten el tercer hash
+
+000000c3:	ROR DWORD(REG0x24) ,0xb 
+
+000000c7:	MOV HardcodedString[0xa3],DWORD(REG0x24) 	; guarda el tercer hash modificado
+
+000000cd:	MOV DWORD(REG0x4) ,HardcodedString[0x9f]	; obten el segundo hash
+
+000000d3:	XOR HardcodedString[0x9b],DWORD(REG0x4) 	; xorealo con el primero
+
+000000d9:	ADD HardcodedString[0xa3],DWORD(REG0x4) 	; súmaselo al tercero
+
+000000df:	MOV DWORD(REG0x4) ,HardcodedString[0x9b]	; obten el primer hash modificado
+
+000000e5:	SUB HardcodedString[0xa3],DWORD(REG0x4) 	; réstaselo al tercero
+
+
+-------------------------------------------------------------------------------------------------------------
+
+
+000000eb:	CALL CrackmeObtenBytesDeNombre 				; ve obteniendo bytes "hasheados" en un buffer de memoria
+
+000000f0:	CALL CrackmeObtenHashDeNombre 		; Obten un hash respecto al valor anterior
+
+000000f5:	MOV HardcodedString[0xa7],DWORD(REG0x4) 			; guarda ese valor
+
+000000fb:	CALL CrackmeObtenParValoresDeNombre 	; Obten dos valores hasheados y mételos en memoria
+
+
+-------------------------------------------------------------------------------------------------------------
+
+
+00000100:	MOV DWORD(REG0x4) ,HardcodedString[0x9b] 			; pilla el primer valor de myserial hash
+
+00000106:	MOV HardcodedString[0x93],DWORD(REG0x4) 			; guardalo en 0x93
+
+0000010c:	MOV DWORD(REG0x4) ,HardcodedString[0x9f] 			; pilla el segundo hash 
+
+00000112:	MOV DWORD(REG0x24) ,0x93 
+
+00000119:	ADD DWORD(REG0x24) ,0x4 
+
+00000120:	MOV HardcodedString[DWORD(REG0x24)],DWORD(REG0x4) 	; guardalo en 0x97
+
+
+-------------------------------------------------------------------------------------------------------------
+
+
+00000124:	MOV DWORD(REG0xc) ,0xa 								; REG0xc = 0xa
+
+0000012b:	MOV DWORD(REG0x10) ,0xab 							; REG0x10 apunta a valoresHasheados[0] (En keygen)
+
+00000132:	MOV DWORD(REG0x4) ,0x93 							; REG0x4 apunta al primer hash de mi serial to modificado mySerialHash[0]
+
+00000139:	CALL VIRTUAL_FUNCTION_00000458
+
+0000013e:	DEC BYTE(REG0xc) 
+
+00000141:	CMP BYTE(REG0xc) ,0x0
+			JNZ  0x12b
+
+
+-------------------------------------------------------------------------------------------------------------
+
+
+
+00000148:	CALL CrackmeSumaValoresBuffer
+
+0000014d:	MOV DWORD(REG0x24) ,0x93 
+
+00000154:	ADD DWORD(REG0x24) ,0x4 
+
+0000015b:	CMP DWORD(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+			JNZ  0x1f8
+
+00000162:	MOV DWORD(REG0x4) ,HardcodedString[0xa3]
+
+00000168:	MOV DWORD(REG0x24) ,0x93 
+
+0000016f:	ADD DWORD(REG0x24) ,0x4 
+
+00000176:	MOV HardcodedString[DWORD(REG0x24)],DWORD(REG0x4) 
+
+0000017a:	MOV DWORD(REG0x4) ,HardcodedString[0xa7]
+
+00000180:	MOV HardcodedString[0xb3],DWORD(REG0x4) 
+
+00000186:	MOV DWORD(REG0x24) ,0xb3 
+
+0000018d:	ADD DWORD(REG0x24) ,0x4 
+
+00000194:	MOV HardcodedString[DWORD(REG0x24)],0x6b79745f 
+
+0000019b:	MOV DWORD(REG0xc) ,0xf 
+
+000001a2:	MOV DWORD(REG0x10) ,0xb3 
+
+000001a9:	MOV DWORD(REG0x4) ,0x93 
+
+000001b0:	CALL VIRTUAL_FUNCTION_00000458
+
+000001b5:	DEC DWORD(REG0xc) 
+
+000001b8:	CMP DWORD(REG0xc) ,0x0
+			JNZ  0x1a2
+
+000001c2:	MOV DWORD(REG0x1c) ,0x93 
+
+000001c9:	MOV DWORD(REG0x20) ,0x2a 
+
+000001d0:	XOR DWORD(REG0xc) ,DWORD(REG0xc) 
+
+000001d4:	MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x1c)]
+
+000001d8:	CMP BYTE(REG0x4) ,HardcodedString[DWORD(REG0x20)]
+			JNZ  0x1f8
+
+000001df:	INC DWORD(REG0x1c) 
+
+000001e2:	INC DWORD(REG0x20) 
+
+000001e5:	INC DWORD(REG0xc) 
+
+000001e8:	CMP DWORD(REG0xc) ,0x8
+			JNZ  0x1d4
+
+000001f2:	MOV HardcodedString[0x109],0x1 
+
+000001f8:	ERROR_OPCODE
+
+
+CrackmeCheckeaDosGuionesCambialosPor0s	proc
+
+	000001f9:	XOR DWORD(REG0x4) ,DWORD(REG0x4) 
+
+	000001fd:		XOR DWORD(REG0x10) ,DWORD(REG0x10) 
+
+	00000201:		MOV DWORD(REG0x1c) ,0xe0 
+
+	00000208:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x1c)]
+
+	0000020c:		CMP BYTE(REG0x4) ,0x2d
+					JNZ  0x21f
+
+	00000213:		INC DWORD(REG0x10) 
+
+	00000216:		MOV HardcodedString[DWORD(REG0x1c)],0x0 
+
+	0000021a:		JMP 0x23c 
+
+	0000021f:		MOV DWORD(REG0xc) ,0x0 
+
+	00000226:		CMP BYTE(REG0x4) ,HardcodedString[DWORD(REG0xc)]
+					JZ  0x23c
+
+	0000022d:		INC DWORD(REG0xc) 
+
+	00000230:		CMP HardcodedString[DWORD(REG0xc)],0x0
+					JNZ  0x226
+
+	00000237:		JMP 0x255 
+
+	0000023c:		INC DWORD(REG0x1c) 
+
+	0000023f:		CMP HardcodedString[DWORD(REG0x1c)],0x0
+					JNZ  0x208
+
+	00000246:		CMP DWORD(REG0x10) ,0x2
+					JNZ  0x255
+
+	00000250:		XOR DWORD(REG0x4) ,DWORD(REG0x4) 
+
+	00000254:		RET 
+
+CrackmeCheckeaDosGuionesCambialosPor0s	endp
+
+00000255:	MOV DWORD(REG0x4) ,0xffffffffL 
+
+0000025c:	RET 
+
+CrackmeCheckeaDosGuionesCambialosPor0s	endp
+
+
+CrackmeStrlen	proc
+
+	0000025d:	MOV DWORD(REG0x20) ,DWORD(REG0x1c) 
+
+	00000261:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x20)]
+
+	00000265:		CMP BYTE(REG0x4) ,0x0
+					JZ  0x274
+
+	0000026c:		INC DWORD(REG0x20) 
+
+	0000026f:		JMP 0x261 
+
+	00000274:		SUB DWORD(REG0x20) ,DWORD(REG0x1c) 
+
+	00000278:		MOV DWORD(REG0x4) ,DWORD(REG0x20) 
+
+	0000027c:		RET 
+
+CrackmeStrlen	endp
+
+
+CrackmeSetCharset	proc
+
+	0000027d:	XOR DWORD(REG0x10) ,DWORD(REG0x10) 
+
+	00000281:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x1c)]
+
+	00000285:		MOV DWORD(REG0x8) ,0x0 
+
+	0000028c:		DEC DWORD(REG0x8) 
+
+	0000028f:		INC DWORD(REG0x8) 
+
+	00000292:		CMP BYTE(REG0x4) ,HardcodedString[DWORD(REG0x8)]
+					JNZ  0x28f
+
+	00000299:		SUB DWORD(REG0x8) ,0x0 
+
+	000002a0:		MOV HardcodedString[DWORD(REG0x1c)],BYTE(REG0x8) 
+
+	000002a4:		INC DWORD(REG0x1c) 
+
+	000002a7:		CMP HardcodedString[DWORD(REG0x1c)],0x0
+					JNZ  0x27d
+
+	000002ae:		RET 
+
+CrackmeSetCharset	endp
+
+
+CrackmeHasheaCadenaSerial	proc
+
+	000002af:	PUSH DWORD(REG0x8) 
+
+	000002b2:		XOR DWORD(REG0x8) ,DWORD(REG0x8) 
+
+	000002b6:		XOR DWORD(REG0x4) ,DWORD(REG0x4) 
+
+	000002ba:		MOV DWORD(REG0x10) ,DWORD(REG0x1c) 
+
+	000002be:		ADD DWORD(REG0x1c) ,0x5 
+
+	000002c5:		SUB DWORD(REG0x10) ,0x1 
+
+	000002cc:		MOV DWORD(REG0x20) ,0x1 
+
+	000002d3:		XOR DWORD(REG0x4) ,DWORD(REG0x4) 
+
+	000002d7:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x1c)]
+
+	000002db:		IMUL DWORD(REG0x4) ,DWORD(REG0x20) 
+
+	000002df:		ADD DWORD(REG0x8) ,DWORD(REG0x4) 
+
+	000002e3:		IMUL DWORD(REG0x20) ,0x29 
+
+	000002ea:		DEC DWORD(REG0x1c) 
+
+	000002ed:		CMP DWORD(REG0x1c) ,DWORD(REG0x10) 
+					JNZ  0x2d3
+
+	000002f4:		INC DWORD(REG0x1c) 
+
+	000002f7:		MOV DWORD(REG0x4) ,DWORD(REG0x8) 
+
+	000002fb:		POP DWORD(REG0x8) 
+
+	000002fe:		RET 
+
+CrackmeHasheaCadenaSerial	endp
+
+
+CrackmeObtenBytesDeNombre	proc
+
+	000002ff:	MOV DWORD(REG0x20) ,0xbb 							; REG0x20 = offset 0xbb (apunta al nombre introducido)
+
+	00000306:		MOV DWORD(REG0x10) ,DWORD(REG0x20) 				; REG0x10 = mismo offset anterior
+
+	0000030a:		ADD DWORD(REG0x10) ,HardcodedString[0x105] 		; Suma el tamaño del nombre
+
+	00000310:		MOV DWORD(REG0x1c) ,0x33 
+
+	00000317:		ADD DWORD(REG0x1c) ,0x5f 						; REG0x1c = 0x92
+
+	0000031e:		XOR DWORD(REG0xc) ,DWORD(REG0xc) 
+
+	00000322:		XOR DWORD(REG0x4) ,DWORD(REG0x4) 
+
+	00000326:		XOR BYTE(REG0x4) ,HardcodedString[DWORD(REG0x20)] 	; Mueve una letra del nombre a REG0x4
+
+	0000032a:		XOR BYTE(REG0x4) ,0x75 								
+
+	0000032e:		ADD BYTE(REG0x4) ,BYTE(REG0xc) 
+
+	00000332:		ADD DWORD(REG0xc) ,0x3 
+
+	00000339:		XOR DWORD(REG0xc) ,0x45 
+
+	00000340:		ROL DWORD(REG0xc) ,0x3 
+
+	00000344:		INC DWORD(REG0x20) 									; Apunta al siguiente caracter del nombre
+
+	00000347:		MOV HardcodedString[DWORD(REG0x1c)],BYTE(REG0x4) 	; finalmente mueve ese byte a una zona de memoria
+
+	0000034b:		CMP DWORD(REG0x1c) ,0x33 							; Si hemos ocupado los 0x5f
+					JZ  0x36b 											; salta al final
+
+	00000355:		DEC DWORD(REG0x1c)  								; apunta a la siguiente zona de memoria
+
+	00000358:		CMP DWORD(REG0x20) ,DWORD(REG0x10)  				; Mira a ver si aún queda nombre (no hemos alcanzado la longitud total)
+					JNZ  0x326 											; si no es así, salta para seguir obteniendo valor del nombre
+
+	0000035f:		MOV DWORD(REG0x20) ,0xbb 
+
+	00000366:		JMP 0x326 
+
+	0000036b:		RET 
+
+CrackmeObtenBytesDeNombre	endp
+
+
+CrackmeObtenParValoresDeNombre	proc
+
+	0000036c:	MOV DWORD(REG0x4) ,0x13a1dcb4 								; REG0x4 = 0x13a1dcb4
+
+	00000373:		MOV DWORD(REG0x8) ,0x45e8adc1  							; REG0x8 = 0x45e8adc1
+
+	0000037a:		MOV DWORD(REG0xc) ,0x28  								; REG0xc = 0x28
+
+	00000381:		MOV DWORD(REG0x1c) ,0x33  								; REG0x1c apunta al buffer de memoria con los bytes hasheados
+
+	00000388:		MOV DWORD(REG0x20) ,DWORD(REG0x1c) 
+
+	0000038c:		ADD DWORD(REG0x20) ,0x30  								; REG0x20 apunta a 0x66 para pillar valores
+
+	00000393:		MOV DWORD(REG0x10) ,DWORD(REG0x20)  					; REG0x10 = 0x66
+
+	00000397:		XOR DWORD(REG0x4) ,HardcodedString[DWORD(REG0x1c)]   	; xorea valor con 4 bytes de la cadena de bytes hasheados
+
+	0000039b:		ROL DWORD(REG0x4) ,0x3 
+
+	0000039f:		ADD DWORD(REG0x4) ,HardcodedString[DWORD(REG0x20)] 		; súmale los bytes de la parte de 0x66 para arriba
+
+	000003a3:		ADD DWORD(REG0x1c) ,0x4  								; apunta a los siguientes 4 bytes
+
+	000003aa:		ADD DWORD(REG0x20) ,0x4  								; apunta a los siguientes 4 bytes
+
+	000003b1:		CMP DWORD(REG0x1c) ,DWORD(REG0x10)  					; mira a ver si hemos llegado al límite
+					JNZ  0x397
+
+	000003b8:		XOR DWORD(REG0x4) ,DWORD(REG0x8) 						; xorea el valor obtenido en REG0x4 con el hardcodeado en REG0x8
+
+	000003bc:		MOV DWORD(REG0x24) ,DWORD(REG0x4) 						; Las siguientes cuatro instrucciones establecen nuevos valores
+																			; en REG0x4 y REG0x8
+
+	000003c0:		MOV DWORD(REG0x28) ,DWORD(REG0x8) 
+
+	000003c4:		MOV DWORD(REG0x8) ,DWORD(REG0x24) 
+
+	000003c8:		MOV DWORD(REG0x4) ,DWORD(REG0x28) 
+
+	000003cc:		DEC DWORD(REG0xc)  										; buclea de nuevo for 0x28
+
+	000003cf:		CMP DWORD(REG0xc) ,0x0 									; si es 0 al carajo
+					JNZ  0x381 												; si no es 0 pues acaba
+
+	000003d9:		MOV HardcodedString[0xab],DWORD(REG0x4) 
+
+	000003df:		MOV DWORD(REG0x24) ,0xab 
+
+	000003e6:		ADD DWORD(REG0x24) ,0x4 
+
+	000003ed:		MOV HardcodedString[DWORD(REG0x24)],DWORD(REG0x8) 
+
+	000003f1:		RET 
+
+CrackmeObtenParValoresDeNombre	endp
+
+
+CrackmeSumaValoresBuffer	proc
+
+	000003f2:	XOR DWORD(REG0x4) ,DWORD(REG0x4) 
+
+	000003f6:		MOV DWORD(REG0x1c) ,0x33 
+
+	000003fd:		MOV DWORD(REG0x20) ,DWORD(REG0x1c) 
+
+	00000401:		ADD DWORD(REG0x20) ,0x5d 
+
+	00000408:		ADD DWORD(REG0x4) ,HardcodedString[DWORD(REG0x1c)]
+
+	0000040c:		INC DWORD(REG0x1c) 
+
+	0000040f:		CMP DWORD(REG0x1c) ,DWORD(REG0x20) 
+					JNZ  0x408
+
+	00000416:		RET 
+
+CrackmeSumaValoresBuffer	endp
+
+
+CrackmeObtenHashDeNombre	proc
+
+	00000417:	MOV DWORD(REG0x4) ,0x1a2b3c4d 								; valor constante 
+
+	0000041e:		MOV DWORD(REG0xc) ,0xff 
+
+	00000425:		MOV DWORD(REG0x1c) ,0x33 								; apunta a los bytes creado con la función CrackmeObtenBytesDeNombre
+
+	0000042c:		MOV DWORD(REG0x20) ,DWORD(REG0x1c)  				
+
+	00000430:		ADD DWORD(REG0x20) ,0x5d  								; apunta al final de esa cadena (teniendo en cuenta los 4 bytes)
+
+	00000437:		MOV DWORD(REG0x8) ,HardcodedString[DWORD(REG0x1c)] 		; pilla 4 bytes de esos bytes cifrados
+
+	0000043b:		XOR DWORD(REG0x4) ,DWORD(REG0x8) 						; ve xoreando con la cadena
+
+	0000043f:		ROL DWORD(REG0x4) ,0x7 
+
+	00000443:		INC DWORD(REG0x1c) 										; apunta al siguiente byte
+
+	00000446:		CMP DWORD(REG0x1c) ,DWORD(REG0x20) 						; mira a ver si llegamos al final
+					JNZ  0x437 												; si no es así sigue 
+
+	0000044d:		DEC BYTE(REG0xc)  										; decrementa de 99
+
+	00000450:		CMP BYTE(REG0xc) ,0x0 									; mira a ver si es 0 y au
+					JNZ  0x425
+
+	00000457:		RET  		
+
+CrackmeObtenHashDeNombre	endp
+
+
+VIRTUAL_FUNCTION_00000458	proc
+
+	00000458:	PUSHAD 
+
+	00000459:		PUSH DWORD(REG0x4) 
+
+	0000045c:		MOV DWORD(REG0xc) ,HardcodedString[DWORD(REG0x10)]	; valoresHasheados[0]
+
+	00000460:		MOV HardcodedString[0x10a],DWORD(REG0xc) 			; guarda valoresHasheados[0]
+
+	00000466:		MOV DWORD(REG0x24) ,DWORD(REG0x10) 					; REG0x24 = offset valoresHasheados[0] (0xab)
+
+-------------------------------------------------------------------------------------------------------------
+
+	0000046a:		ADD DWORD(REG0x24) ,0x4  							; REG0x24 apunta a valoresHasheados[1]
+
+	00000471:		MOV DWORD(REG0xc) ,HardcodedString[DWORD(REG0x24)]	; Reg0xc = valoresHasheados[1]
+
+	00000475:		MOV DWORD(REG0x24) ,0x10a 							; Reg0x24 offset valor 0xa
+
+	0000047c:		ADD DWORD(REG0x24) ,0x4  							; REG0x24 = 0x10e
+
+	00000483:		MOV HardcodedString[DWORD(REG0x24)],DWORD(REG0xc) 	; offset 0x10e = valoresHasheados[1]
+
+-------------------------------------------------------------------------------------------------------------
+
+	00000487:		CALL VIRTUAL_FUNCTION_00000682
+
+	0000048c:		MOV DWORD(REG0x20) ,DWORD(REG0x4) 
+
+	00000490:		POP DWORD(REG0x1c) 
+
+	00000493:		XOR DWORD(REG0x4) ,DWORD(REG0x4) 
+
+	00000497:		MOV DWORD(REG0xc) ,0x64 
+
+	0000049e:		XOR DWORD(REG0x8) ,DWORD(REG0x8) 
+
+	000004a2:		MOV DWORD(REG0x24) ,DWORD(REG0x1c) 
+
+	000004a6:		MOV DWORD(REG0x8) ,DWORD(REG0x24) 
+
+	000004aa:		ADD DWORD(REG0x8) ,0x7 
+
+	000004b1:		MOV DWORD(REG0x28) ,DWORD(REG0x10) 
+
+-------------------------------------------------------------------------------------------------------------
+
+	000004b5:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	000004b9:		XOR BYTE(REG0x4) ,HardcodedString[DWORD(REG0x28)]
+
+	000004bd:		INC DWORD(REG0x28) 
+
+	000004c0:		SUB BYTE(REG0x4) ,HardcodedString[DWORD(REG0x28)]
+
+	000004c4:		DEC DWORD(REG0x28) 
+
+	000004c7:		ADD BYTE(REG0x4) ,0x12 
+
+	000004cb:		MOV HardcodedString[DWORD(REG0x24)],BYTE(REG0x4) 
+
+	000004cf:		INC DWORD(REG0x28) 
+
+	000004d2:		INC DWORD(REG0x24) 
+
+	000004d5:		CMP DWORD(REG0x24) ,DWORD(REG0x8) 
+					JNZ  0x4b5
+
+-------------------------------------------------------------------------------------------------------------
+
+	000004dc:		XOR DWORD(REG0x8) ,DWORD(REG0x8) 
+
+	000004e0:		MOV DWORD(REG0x24) ,DWORD(REG0x1c) 
+
+	000004e4:		MOV DWORD(REG0x28) ,HardcodedString[DWORD(REG0x24)]
+
+	000004e8:		ROL DWORD(REG0x28) ,0x3 
+
+	000004ec:		MOV HardcodedString[DWORD(REG0x24)],DWORD(REG0x28) 
+
+-------------------------------------------------------------------------------------------------------------
+
+	000004f0:		ADD DWORD(REG0x24) ,0x4 
+
+	000004f7:		MOV DWORD(REG0x28) ,HardcodedString[DWORD(REG0x24)]
+
+	000004fb:		ROR DWORD(REG0x28) ,0x3 
+
+	000004ff:		MOV HardcodedString[DWORD(REG0x24)],DWORD(REG0x28) 
+
+-------------------------------------------------------------------------------------------------------------
+
+	00000503:		MOV DWORD(REG0x24) ,DWORD(REG0x1c) 
+
+	00000507:		MOV DWORD(REG0x28) ,DWORD(REG0x10) 
+
+	0000050b:		MOV DWORD(REG0x4) ,HardcodedString[DWORD(REG0x28)]
+
+	0000050f:		XOR HardcodedString[DWORD(REG0x24)],DWORD(REG0x4) 
+
+-------------------------------------------------------------------------------------------------------------
+
+	00000513:		ADD DWORD(REG0x28) ,0x4 
+
+	0000051a:		ADD DWORD(REG0x24) ,0x4 
+
+	00000521:		MOV DWORD(REG0x4) ,HardcodedString[DWORD(REG0x28)]
+
+	00000525:		XOR HardcodedString[DWORD(REG0x24)],DWORD(REG0x4) 
+
+-------------------------------------------------------------------------------------------------------------
+
+	00000529:		MOV DWORD(REG0x24) ,DWORD(REG0x1c) 
+
+	0000052d:		MOV DWORD(REG0x28) ,DWORD(REG0x10) 
+
+	00000531:		ADD HardcodedString[DWORD(REG0x24)],DWORD(REG0x4) 
+
+-------------------------------------------------------------------------------------------------------------
+
+	00000535:		MOV DWORD(REG0x4) ,HardcodedString[DWORD(REG0x28)]
+
+	00000539:		ADD DWORD(REG0x24) ,0x4 
+
+	00000540:		ADD HardcodedString[DWORD(REG0x24)],DWORD(REG0x4) 
+
+-------------------------------------------------------------------------------------------------------------
+
+	00000544:		INC DWORD(REG0x8) 
+
+	00000547:		CMP DWORD(REG0x8) ,0x10
+					JNZ  0x4e0
+
+------------------------------------------------------------------------------------------------------------- (bucle while)
+
+	00000551:		XOR DWORD(REG0x8) ,DWORD(REG0x8) 
+
+	00000555:		MOV DWORD(REG0x18) ,0x20 
+
+	0000055c:		CALL VIRTUAL_FUNCTION_00000764
+
+	00000561:		CMP DWORD(REG0x4) ,0x0
+					JZ  0x5a9
+
+	0000056b:		PUSH DWORD(REG0x18) 
+
+	0000056e:		CMP DWORD(REG0x18) ,0x7
+					JBE  0x589
+
+	00000578:		SUB DWORD(REG0x18) ,0x7 
+
+	0000057f:		CMP DWORD(REG0x18) ,0x7
+					JA  0x578
+
+	00000589:		MOV DWORD(REG0x24) ,DWORD(REG0x10) 
+
+	0000058d:		ADD DWORD(REG0x24) ,DWORD(REG0x8) 
+
+	00000591:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	00000595:		MOV DWORD(REG0x24) ,DWORD(REG0x1c) 
+
+	00000599:		ADD DWORD(REG0x24) ,DWORD(REG0x18) 
+
+	0000059d:		XOR HardcodedString[DWORD(REG0x24)],BYTE(REG0x4) 
+
+	000005a1:		POP DWORD(REG0x18) 
+
+	000005a4:		JMP 0x5d9 
+
+	000005a9:		PUSH DWORD(REG0x8) 
+
+	000005ac:		CMP DWORD(REG0x8) ,0x7
+					JBE  0x5c7
+
+	000005b6:		SUB DWORD(REG0x8) ,0x7 
+
+	000005bd:		CMP DWORD(REG0x8) ,0x7
+					JA  0x5b6
+
+	000005c7:		MOV DWORD(REG0x24) ,DWORD(REG0x1c) 
+
+	000005cb:		ADD DWORD(REG0x24) ,DWORD(REG0x8) 
+
+	000005cf:		NOT HardcodedString[DWORD(REG0x24)]
+
+	000005d2:		XOR HardcodedString[DWORD(REG0x24)],BYTE(REG0x8) 
+
+	000005d6:		POP DWORD(REG0x8) 
+
+	000005d9:		INC DWORD(REG0x8) 
+
+	000005dc:		CMP DWORD(REG0x8) ,0x8
+					JB  0x5ea
+
+	000005e6:		XOR DWORD(REG0x8) ,DWORD(REG0x8) 
+
+	000005ea:		DEC DWORD(REG0x18) 
+
+	000005ed:		CMP DWORD(REG0x18) ,0x0
+					JNZ  0x55c
+
+	000005f7:		XOR DWORD(REG0x8) ,DWORD(REG0x8) 
+
+	000005fb:		MOV DWORD(REG0x24) ,DWORD(REG0x1c) 
+
+	000005ff:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	00000603:		PUSH DWORD(REG0x1c) 
+
+	00000606:		ADD DWORD(REG0x1c) ,0x7 
+
+	0000060d:		SUB DWORD(REG0x1c) ,DWORD(REG0x8) 
+
+	00000611:		XOR HardcodedString[DWORD(REG0x1c)],BYTE(REG0x4) 
+
+	00000615:		POP DWORD(REG0x1c) 
+
+	00000618:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	0000061c:		ROL BYTE(REG0x4) ,0x3 
+
+	00000620:		MOV HardcodedString[DWORD(REG0x24)],BYTE(REG0x4) 
+
+	00000624:		INC DWORD(REG0x24) 
+
+	00000627:		INC DWORD(REG0x8) 
+
+	0000062a:		CMP DWORD(REG0x8) ,0x8
+					JNZ  0x5ff
+
+	00000634:		MOV DWORD(REG0x24) ,DWORD(REG0x1c) 
+
+	00000638:		MOV DWORD(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	0000063c:		ROL DWORD(REG0x4) ,0x7 
+
+	00000640:		MOV HardcodedString[DWORD(REG0x24)],DWORD(REG0x4) 
+
+	00000644:		ADD DWORD(REG0x24) ,0x4 
+
+	0000064b:		MOV DWORD(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	0000064f:		ROR DWORD(REG0x4) ,0x7 
+
+	00000653:		MOV HardcodedString[DWORD(REG0x24)],DWORD(REG0x4) 
+
+	00000657:		DEC DWORD(REG0xc) 
+
+	0000065a:		CMP DWORD(REG0xc) ,0x0
+					JNZ  0x49e
+
+	00000664:		MOV DWORD(REG0x24) ,0x10a 
+
+	0000066b:		MOV HardcodedString[DWORD(REG0x24)],0x0 
+
+	00000672:		ADD DWORD(REG0x24) ,0x4 
+
+	00000679:		MOV HardcodedString[DWORD(REG0x24)],0x0 
+
+	00000680:		POPAD 
+
+	00000681:		RET 
+
+VIRTUAL_FUNCTION_00000458	endp
+
+
+VIRTUAL_FUNCTION_00000682	proc
+
+	00000682:	XOR DWORD(REG0x8) ,DWORD(REG0x8) 
+
+	00000686:		MOV DWORD(REG0x24) ,0x10a 
+
+	0000068d:		INC DWORD(REG0x24) 
+
+	00000690:		ADD DWORD(REG0x24) ,DWORD(REG0x8) 
+
+	00000694:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	00000698:		DEC DWORD(REG0x24) 
+
+	0000069b:		ADD HardcodedString[DWORD(REG0x24)],BYTE(REG0x4) 
+
+	0000069f:		SUB HardcodedString[DWORD(REG0x24)],BYTE(REG0x8) 
+
+-------------------------------------------------------------------------------------------------------------
+
+	000006a3:		MOV DWORD(REG0x24) ,0x10a 
+
+	000006aa:		MOV DWORD(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	000006ae:		ROL DWORD(REG0x4) ,0x5 
+
+	000006b2:		MOV HardcodedString[DWORD(REG0x24)],DWORD(REG0x4) 
+
+	000006b6:		ADD DWORD(REG0x24) ,0x4 
+
+	000006bd:		MOV DWORD(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	000006c1:		ROR DWORD(REG0x4) ,0x5 
+
+	000006c5:		MOV HardcodedString[DWORD(REG0x24)],DWORD(REG0x4) 
+
+-------------------------------------------------------------------------------------------------------------
+
+	000006c9:		INC DWORD(REG0x8) 
+
+	000006cc:		CMP DWORD(REG0x8) ,0x7
+					JNZ  0x686
+
+------------------------------------------------------------------------------------------------------------- Bucle while
+
+	000006d6:		XOR DWORD(REG0x4) ,DWORD(REG0x4) 
+
+	000006da:		XOR DWORD(REG0x8) ,DWORD(REG0x8) 
+
+	000006de:		XOR DWORD(REG0xc) ,DWORD(REG0xc) 
+
+	000006e2:		MOV DWORD(REG0x1c) ,0x45 
+
+	000006e9:		MOV DWORD(REG0x24) ,0x10a 
+
+	000006f0:		ADD DWORD(REG0x24) ,DWORD(REG0x8) 
+
+	000006f4:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	000006f8:		ADD DWORD(REG0xc) ,DWORD(REG0x4) 
+
+	000006fc:		IMUL DWORD(REG0x1c) ,DWORD(REG0x1c) 
+
+	00000700:		INC DWORD(REG0xc) 
+
+	00000703:		IMUL DWORD(REG0xc) ,DWORD(REG0x1c) 
+
+	00000707:		INC DWORD(REG0x8) 
+
+	0000070a:		CMP DWORD(REG0x8) ,0x4
+					JNZ  0x6e9
+
+-------------------------------------------------------------------------------------------------------------
+
+	00000714:		PUSH DWORD(REG0xc) 
+
+	00000717:		XOR DWORD(REG0x4) ,DWORD(REG0x4) 
+
+	0000071b:		XOR DWORD(REG0x8) ,DWORD(REG0x8) 
+
+	0000071f:		XOR DWORD(REG0xc) ,DWORD(REG0xc) 
+
+	00000723:		MOV DWORD(REG0x1c) ,0x35 
+
+	0000072a:		MOV DWORD(REG0x24) ,0x10a 
+
+	00000731:		ADD DWORD(REG0x24) ,0x4 
+
+	00000738:		ADD DWORD(REG0x24) ,DWORD(REG0x8) 
+
+	0000073c:		MOV BYTE(REG0x4) ,HardcodedString[DWORD(REG0x24)]
+
+	00000740:		SUB DWORD(REG0xc) ,DWORD(REG0x4) 
+
+	00000744:		IMUL DWORD(REG0x1c) ,DWORD(REG0x1c) 
+
+	00000748:		INC DWORD(REG0xc) 
+
+	0000074b:		IMUL DWORD(REG0xc) ,DWORD(REG0x1c) 
+
+	0000074f:		INC DWORD(REG0x8) 
+
+	00000752:		CMP DWORD(REG0x8) ,0x4
+					JNZ  0x72a
+
+	0000075c:		POP DWORD(REG0x4) 
+
+	0000075f:		IMUL DWORD(REG0x4) ,DWORD(REG0xc) 
+
+	00000763:		RET 
+
+VIRTUAL_FUNCTION_00000682	endp
+
+
+VIRTUAL_FUNCTION_00000764	proc
+
+	00000764:	PUSH DWORD(REG0x18) 
+
+	00000767:		PUSH DWORD(REG0x20) 
+
+	0000076a:		MOV DWORD(REG0x4) ,0x1 
+
+	00000771:		JMP 0x77a 
+
+	00000776:		SHL DWORD(REG0x4) ,0x1 
+
+	0000077a:		DEC DWORD(REG0x18) 
+
+	0000077d:		CMP DWORD(REG0x18) ,0xffffffffL
+					JNZ  0x776
+
+	00000787:		AND DWORD(REG0x20) ,DWORD(REG0x4) 
+
+	0000078b:		CMP DWORD(REG0x20) ,0x0
+					JZ  0x7a1
+
+	00000795:		MOV DWORD(REG0x4) ,0x1 
+
+	0000079c:		JMP 0x7a5 
+
+	000007a1:		XOR DWORD(REG0x4) ,DWORD(REG0x4) 
+
+	000007a5:		POP DWORD(REG0x20) 
+
+	000007a8:		POP DWORD(REG0x18) 
+
+	000007ab:		RET 
+
+VIRTUAL_FUNCTION_00000764	endp
+
