@@ -11,9 +11,9 @@ Here I have my notes about Genyatyk VM, I have my analysis of the binary (once u
 
 + Crackme .idb from IDA 6.8: <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/vmkgme__.idb">vmkgme__.idb</a>
 
-+ Crackme with mew packer: <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/vmkgme.exe">vmkgme__.exe</a>
++ Crackme with mew packer: <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/VMkgme.exe.exe">vmkgme.exe</a>
 
-+ Crackme .idb (with mew) from IDA 6.8: <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/vmkgme.idb">vmkgme__.idb</a>
++ Crackme .idb (with mew) from IDA 6.8: <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/VMkgme.idb">vmkgme.idb</a>
 
 + Some functions from Crackme in C, and the keygen from Andrewl resolution: <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/GenaytykVM.cpp">GenaytykVM.cpp</a>
 
