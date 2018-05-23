@@ -323,6 +323,12 @@ ERROR_STATE = 99
 ESTADO = SETUP
 
 
+byte_registers = ['AL','BL','CL','DL','AH','BH','CH','DH']
+
+word_registers = ['AX','BX','CX','DX','DI','SI','SP','BP']
+
+dword_registers = ['EAX','EBX','ECX','EDX','EDI','ESI','ESP','EBP','REG0x24','REG0x28']
+
 def getOperation(opcode):
     '''
     Función para obtener la operación del opcode
@@ -416,6 +422,41 @@ def getRegister(opcode):
             print "Register: %s" % (register)
             return register
     return None
+
+def AddPrefixMov(instruction):
+    '''
+    Método para añadir los siguientes prefijos:
+        -   byte ptr
+        -   word ptr
+        -   dword ptr
+    '''
+    print "[+] Instruction to resolve: " + instruction
+
+    operation = instruction.split(' ')[0]
+    operand_1 = instruction.split(', ')[0].strip(' ').replace(operation + ' ', '')
+    operand_2 = instruction.split(', ')[1].strip(' ')
+
+    if operand_1 in byte_registers:
+        operand_2 = "byte ptr " + operand_2
+    elif operand_1 in word_registers:
+        operand_2 = "word ptr " + operand_2
+    elif operand_1 in dword_registers:
+        operand_2 = "dword ptr " + operand_2
+
+    if operand_2 in byte_registers:
+        operand_1 = "byte ptr " + operand_1
+    elif operand_2 in word_registers:
+        operand_1 = "word ptr " + operand_1
+    elif operand_2 in dword_registers:
+        operand_1 = "dword ptr " + operand_1
+
+    print "[+] Operation: " + operation
+    print "[+] Operand_1: " + operand_1
+    print "[+] Operand_2: " + operand_2
+
+    return operation + " " + operand_1 + " , " + operand_2
+
+
 
 def scripter_pipter():
     '''
@@ -611,6 +652,9 @@ def scripter_pipter():
 
             if instruction[-2] == ',':
                 instruction = instruction[:-2]
+
+            if ('MOV' in instruction) and ('[HardcodedString' in instruction):
+                instruction = AddPrefixMov(instruction)
 
             ESTADO = END_NORMAL
             continue
