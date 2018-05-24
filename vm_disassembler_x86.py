@@ -5,17 +5,18 @@
 #       de genaytyk, esta tercera versión estará implementada
 #       con una máquina de estados para manejar correctamente
 #       el desensamblado, sacaremos la salida como un archivo
-#       .s
+#       .asm
 #
 #============================================================
 
 import os, sys
+from pprint import pprint
 
-version         = "1.0"
+version         = "2.0"
 author          = "F9(@Farenain)"
-date            = "2018/05/22"
+date            = "2018/05/24"
 module          = "vm_disassembler_x86.py"
-description     = "*   F9 Reversing Tools   ***\n* Genaytyk VM Decompiler ***"
+description     = "*   F9 Reversing Tools   ***\n* Genaytyk VM x86 Disassembler ***"
 
 
 hardcodedString = 'aAb0cBd1eCf2gDh3jEk4lFm5nGp6qHr7sJt8uKv9w'
@@ -303,6 +304,7 @@ codeOfVM = [0x17 ,0x04 ,0x00 ,0x01 ,0xF9 ,                                  # CA
 
 INDEX = 0      
 CALL_JMP = False
+JMP_OP = False
 IS_RET = False
 IS_IN_CALL = False
 RET = 0
@@ -410,15 +412,6 @@ def getRegister(opcode):
     for i in opcodesIndexOffsetSize:
         if opcode == i[0]:
             register = i[3]
-            '''
-            register += hex(i[1])
-            if i[2] == BYTE:
-                register = "BYTE(" + register + ")"
-            elif i[2] == WORD:
-                register = "WORD(" + register + ")"
-            elif i[2] == DWORD:
-                register = "DWORD(" + register + ")"
-            '''
             print "Register: %s" % (register)
             return register
     return None
@@ -433,6 +426,10 @@ def AddPrefixMov(instruction):
     print "[+] Instruction to resolve: " + instruction
 
     operation = instruction.split(' ')[0]
+
+    if operation in ['NOT','INC','DEC','CALL']:
+        return instruction.replace('[HardcodedString','dword ptr [HardcodedString')
+
     operand_1 = instruction.split(', ')[0].strip(' ').replace(operation + ' ', '')
     operand_2 = instruction.split(', ')[1].strip(' ')
 
@@ -449,12 +446,82 @@ def AddPrefixMov(instruction):
         operand_1 = "word ptr " + operand_1
     elif operand_2 in dword_registers:
         operand_1 = "dword ptr " + operand_1
+    elif operand_2[0] == '0' and operand_2[-1] == 'h':
+        operand_1 = "dword ptr " + operand_1
 
     print "[+] Operation: " + operation
     print "[+] Operand_1: " + operand_1
     print "[+] Operand_2: " + operand_2
 
     return operation + " " + operand_1 + " , " + operand_2
+
+def FixDoubleENDP():
+    '''
+    Función para quitar el primer VIRTUAL_FUNCTION_000001f9...
+    es una guarrada hacerlo así... pero no me mireis :(
+    '''
+    archivo = open('vm_instructions.asm','r')
+
+    lineas = []
+
+    borrado_primera_instancia = False
+
+    for line in archivo.readlines():
+        if ('VIRTUAL_FUNCTION_000001F9' in line) and ('endp' in line) and (not borrado_primera_instancia):
+            borrado_primera_instancia = True
+        else:
+            lineas.append(line)
+
+    archivo.close()
+
+    archivo = open('vm_instructions.asm','w')
+
+    for line in lineas:
+        archivo.write(line)
+
+    archivo.close()
+
+def FixFalseRegisters(instruction):
+    '''
+    Arreglar los problemas de cuando aparece un REG0x24 o REG0x28
+    al usar variables para estos "registros" tendremos que cambiarlos
+    por código correspondiente que use un registro
+    '''
+    finalInstruct = ""
+
+    print "[+] Instruction to modify: " + instruction
+    
+    RegisterToUse = "ECX"
+
+    if RegisterToUse in instruction:
+        RegisterToUse = "EBX"
+
+    if "REG0x28" in instruction and "REG0x24" in instruction:
+        finalInstruct += "push ECX\n"
+        finalInstruct += "\t\t\t\tpush EBX\n"
+        finalInstruct += "\t\t\t\tMOV ECX , dword ptr [REG0x24]\n"
+        finalInstruct += "\t\t\t\tMOV EBX , dword ptr [REG0x28]\n"
+        finalInstruct += "\t\t\t\t" + instruction.replace("REG0x24","ECX").replace("REG0x28","EBX") + "\n"
+        finalInstruct += "\t\t\t\tMOV dword ptr [REG0x28] , EBX\n"
+        finalInstruct += "\t\t\t\tMOV dword ptr [REG0x24] , ECX\n"
+        finalInstruct += "\t\t\t\tpop EBX\n"
+        finalInstruct += "\t\t\t\tpop ECX\n"
+    elif "REG0x28" in instruction:
+        finalInstruct += "push %s\n" % (RegisterToUse)
+        finalInstruct += "\t\t\t\tMOV %s , [REG0x28]\n" % (RegisterToUse)
+        finalInstruct += "\t\t\t\t" + instruction.replace("REG0x28",RegisterToUse) + "\n"
+        finalInstruct += "\t\t\t\tMOV dword ptr [REG0x28] , %s\n" % (RegisterToUse)
+        finalInstruct += "\t\t\t\tpop %s\n" % (RegisterToUse)
+    elif "REG0x24" in instruction:
+        finalInstruct += "push %s\n" % (RegisterToUse)
+        finalInstruct += "\t\t\t\tMOV %s , [REG0x24]\n" % (RegisterToUse)
+        finalInstruct += "\t\t\t\t" + instruction.replace("REG0x24",RegisterToUse) + "\n"
+        finalInstruct += "\t\t\t\tMOV dword ptr [REG0x24] , %s\n" % (RegisterToUse)
+        finalInstruct += "\t\t\t\tpop %s\n" % (RegisterToUse)
+   
+    return finalInstruct
+
+
 
 
 
@@ -477,6 +544,7 @@ def scripter_pipter():
             hash_offset = 0
             instruction = ""
             CALL_JMP = False
+            JMP_OP = False
             IS_RET = False
             IS_IN_CALL = False
             archivo = open('vm_instructions.asm','w')
@@ -504,7 +572,9 @@ def scripter_pipter():
             archivo.write("MyName db 025h dup(0)\n")
             archivo.write("MySerial db 025h dup(0)\n")
             archivo.write("nameLength dd 0\n")
-            archivo.write("finalComparation dd 0\n\n\n")
+            archivo.write("finalComparation dd 0\n")
+            archivo.write("REG0x24 dd 0\n")
+            archivo.write("REG0x28 dd 0\n\n\n")
             archivo.write(".code\n\n")
             archivo.write("start:\n")
 
@@ -514,6 +584,8 @@ def scripter_pipter():
         elif ESTADO == INIT:
             if INDEX >= len(codeOfVM):
                 archivo.write("end start")
+                archivo.close()
+                FixDoubleENDP()
                 print "\n\n\n[!] Finished disassembling of VM code..."
                 print "Thanks for using vm_disassembler"
                 break
@@ -536,6 +608,8 @@ def scripter_pipter():
             CALL_JMP = False
 
             IS_RET = False
+
+            JMP_OP = False
 
             '''
                 Checkea si operación de un solo opcode (RET, PUSHAD, POPAD, NOP)
@@ -562,12 +636,14 @@ def scripter_pipter():
                 ESTADO = END_NORMAL
                 continue
             elif codeOfVM[INDEX] == 0x1E: # ERROR OPCODE
-                instruction += "ERROR_OPCODE"
+                instruction += "INT 3"
                 INDEX += 1
                 ESTADO = END_NORMAL
                 continue
             elif codeOfVM[INDEX] == 0x17: # CALL
                 CALL_JMP = True
+            elif codeOfVM[INDEX] == 0x10: # JMP
+                JMP_OP = True
 
             two_opcodes = [codeOfVM[INDEX],codeOfVM[INDEX + 1]]
             INDEX += 2
@@ -620,6 +696,12 @@ def scripter_pipter():
             if inst_aux[-2] == ',':
                 inst_aux = inst_aux[:-2]
 
+            if ('[HardcodedString' in inst_aux):
+                inst_aux = AddPrefixMov(inst_aux)
+
+            if('REG0x24' in inst_aux or 'REG0x28' in inst_aux):
+                inst_aux = FixFalseRegisters(inst_aux)
+
             instruction = inst_aux + '\n\t\t\t' + instruction + " " + offsets_to_jump
 
             ESTADO = END_NORMAL
@@ -630,6 +712,8 @@ def scripter_pipter():
                     OFFSET = (getImmediateValue(i['size']))
                     if CALL_JMP:
                         instruction += "VIRTUAL_FUNCTION_%08X" % OFFSET
+                    elif JMP_OP:
+                        instruction += "Label_%08X" % OFFSET
                     else:
                         instruction += "0%Xh" % OFFSET
                         instruction += " "
@@ -653,8 +737,11 @@ def scripter_pipter():
             if instruction[-2] == ',':
                 instruction = instruction[:-2]
 
-            if ('MOV' in instruction) and ('[HardcodedString' in instruction):
+            if ('[HardcodedString' in instruction):
                 instruction = AddPrefixMov(instruction)
+
+            if ('REG0x24' in instruction or 'REG0x28' in instruction):
+                instruction = FixFalseRegisters(instruction)
 
             ESTADO = END_NORMAL
             continue
