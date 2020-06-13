@@ -17,6 +17,6 @@ Here I have my notes about Genyatyk VM, I have my analysis of the binary (once u
 
 + Some functions from Crackme in C, and the keygen from Andrewl resolution: <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/GenaytykVM.cpp">GenaytykVM.cpp</a>
 
-+ Translator from Genaytyk virtual code to LLVM IR: <a href="https://github.com/Fare9/Genaytyk-VM/tree/master/genaytyk2llvmir">genaytyk2llvmir</a>
++ Translator from Genaytyk virtual code to LLVM IR (compiled with LLVM 3.8.1): <a href="https://github.com/Fare9/Genaytyk-VM/tree/master/genaytyk2llvmir">genaytyk2llvmir</a>
 
 As you can see, I was not able to resolve the encrypt function =( I hope to continue learning how this function works and continue working with VMs.
