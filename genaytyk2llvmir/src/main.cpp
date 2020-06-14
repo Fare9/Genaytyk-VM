@@ -1,15 +1,47 @@
 #include "genaytyk_impl.h"
+#include "genaytyk-dis.h"
 #include <memory>
+#include <iostream>
+#include <fstream>
 
 static llvm::LLVMContext &context = llvm::getGlobalContext();
 static llvm::Module *moduleOb = new llvm::Module("genaytyk", context);
+static llvm::IRBuilder<> irbuilder(context);
 
+int main(int argc, char **argv)
+{
+    if (argc != 2)
+    {
+        llvm::outs() << "[-] USAGE: " << argv[0] << " <file_with_code>\n";
+        exit(-1);
+    }
 
+    std::ifstream code_file;
+    code_file.open(argv[1], std::ios::in | std::ios::binary);
 
+    size_t file_size = static_cast<std::uint64_t>(code_file.tellg());
+    code_file.seekg(0, std::ios::end);
+    file_size = static_cast<std::uint64_t>(code_file.tellg()) - file_size;
+    code_file.seekg(0, std::ios::beg);
+
+    std::vector<uint8_t> file_content(file_size);
+
+    code_file.read(reinterpret_cast<char *>(file_content.data()), file_size);
+
+    std::unique_ptr<genaytyk::disassembler::Genaytyk_Disassembler> disassembler(new genaytyk::disassembler::Genaytyk_Disassembler(file_content.data(), file_size, moduleOb, irbuilder));
+
+    disassembler->disassemble(irbuilder);
+
+    moduleOb->dump();
+
+    return 0;
+}
+
+/*
 int
 main(int argc, char **argv)
 {
-    static llvm::IRBuilder<> irbuilder(context);
+    
     std::unique_ptr<genaytyk::GenaytykLlvmIrTranslatorGenaytyk_impl> genaytyk_translator(new genaytyk::GenaytykLlvmIrTranslatorGenaytyk_impl(moduleOb, irbuilder));
     
 
@@ -61,3 +93,4 @@ main(int argc, char **argv)
 
     return 0;
 }
+*/

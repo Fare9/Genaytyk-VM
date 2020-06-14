@@ -68,9 +68,10 @@ namespace genaytyk
         class Genaytyk_Disassembler
         {
         public:
+            Genaytyk_Disassembler(uint8_t *p_to_code, size_t size_of_code, llvm::Module* module, llvm::IRBuilder<>& irbuilder);
 
-            Genaytyk_Disassembler(uint8_t* p_to_code, size_t size_of_code);
 
+            void disassemble(llvm::IRBuilder<>& irbuilder);
             //
             //==============================================================================
             // Initializer methods
@@ -82,18 +83,37 @@ namespace genaytyk
             void initializeRegisterIndexOffsetsize();
             void initializeInstruction2Str();
 
+            void initializeGlobalData(llvm::IRBuilder<>& irbuilder);
 
             //
             //==============================================================================
             // Getters methods
             //==============================================================================
             //
+
+            /// Get the string with the operation
+            /// from its opcode
             std::string getOperationString(uint8_t opcode);
 
+            /// Get the struct of operands given
+            /// the opcode (used as index)-
+            std::vector<uint8_t> getOperandStruct(uint8_t opcode);
+
+            /// Once obtained the operandStruct that
+            /// we're interested in, this return
+            /// a vector of maps with the size of the
+            /// operand in opcodes and the type
+            std::vector<std::map<std::string,uint8_t>> getMapsFromOperandStruct(std::vector<uint8_t> operandStruct);
+
+            /// Get immediate value given a size of immediate
+            /// value, we always return an uint32_t
+            uint32_t getImmediateValue(uint8_t sizeOfImmediate);
+
         private:
+            llvm::Module* module;
             /// pointer to buffer with code
-            uint8_t*    p_to_code;
-            size_t      size_of_code;
+            uint8_t *p_to_code;
+            size_t size_of_code;
 
             /// FSM variables
             uint32_t index;
@@ -105,11 +125,12 @@ namespace genaytyk
             std::string function_name;
 
             states state;
-            
+
+            llvm::GlobalVariable* hardcodedString;
             // Map for the functions, this will correspond
             // to the list of offsets from the previous
             // disassembler
-            std::map<uint32_t, llvm::Function*> addr2llvmfunc;
+            std::map<uint32_t, llvm::Function *> addr2llvmfunc;
 
             /// Map for the basic blocks, for the moment
             /// it will be generated one per instruction
@@ -125,7 +146,11 @@ namespace genaytyk
             std::vector<std::vector<uint8_t>> registersIndexOffsetSize;
 
             // Map for instructions names
-            std::map<uint32_t,std::string> instr2str;
+            std::map<uint32_t, std::string> instr2str;
+
+            // unique pointer to a translation library
+            std::unique_ptr<GenaytykLlvmIrTranslatorGenaytyk_impl> genaytyk_translator;
+        };
 
     } // namespace disassembler
 } // namespace genaytyk

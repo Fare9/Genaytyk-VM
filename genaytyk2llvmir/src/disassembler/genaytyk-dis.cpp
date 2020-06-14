@@ -1,21 +1,249 @@
 #include "genaytyk-dis.h"
+#include "disassembler-exception.h"
 
 namespace genaytyk
 {
     namespace disassembler
     {
-        Genaytyk_Disassembler::Genaytyk_Disassembler(uint8_t *p_to_code, size_t size_of_code) : index(0),
-                                                                                                call_jmp(false),
-                                                                                                jmp_op(false),
-                                                                                                is_ret(false),
-                                                                                                is_in_call(false),
-                                                                                                ret(0),
-                                                                                                function_name(""),
-                                                                                                state(SETUP)
+        Genaytyk_Disassembler::Genaytyk_Disassembler(uint8_t *p_to_code, size_t size_of_code, llvm::Module *module, llvm::IRBuilder<> &irbuilder) : index(0),
+                                                                                                                                                    call_jmp(false),
+                                                                                                                                                    jmp_op(false),
+                                                                                                                                                    is_ret(false),
+                                                                                                                                                    is_in_call(false),
+                                                                                                                                                    ret(0),
+                                                                                                                                                    function_name(""),
+                                                                                                                                                    state(SETUP)
         {
             this->p_to_code = p_to_code;
             this->size_of_code = size_of_code;
+            this->module = module;
+            // as we miss std::make_unique we use the one from llvm
+            this->genaytyk_translator = llvm::make_unique<GenaytykLlvmIrTranslatorGenaytyk_impl>(module, irbuilder);
             this->initialize();
+        }
+
+        void Genaytyk_Disassembler::disassemble(llvm::IRBuilder<> &irbuilder)
+        {
+            llvm::Function *current_function;
+            std::vector<uint8_t> operandStruct;
+            std::vector<std::map<std::string, uint8_t>> mapsOfOperands;
+            instructions instruction;
+
+            while (true)
+            {
+                if (this->state == SETUP)
+                {
+                    this->initializeGlobalData(irbuilder);
+                    // create the main function
+                    current_function = this->genaytyk_translator->createFunc(irbuilder, "main", irbuilder.getVoidTy(), irbuilder.getVoidTy());
+                    auto *bb_entry = this->genaytyk_translator->createBB(current_function, "entry");
+                    irbuilder.SetInsertPoint(bb_entry);
+
+                    this->state = GET_OPERATION;
+                    continue;
+                }
+                else if (this->state == INIT)
+                {
+                    if (this->index >= this->size_of_code)
+                    {
+                        break;
+                    }
+                    this->state = GET_OPERATION;
+                    continue;
+                }
+                else if (this->state == GET_OPERATION)
+                {
+                    llvm::BasicBlock *basic_block;
+                    auto it = this->addr2llvmfunc.find(index);
+
+                    if (it != this->addr2llvmfunc.end())
+                    {
+                        // function is going to start, so create a basic block for it
+                        this->is_in_call = true;
+                        current_function = it->second;
+                    }
+                    // now create basic block for new instruction
+                    // and write instruction in there
+                    if (this->addr2llvmbb.find(index) == this->addr2llvmbb.end())
+                    {
+                        basic_block = this->genaytyk_translator->createBB(current_function, std::to_string(index));
+                        this->addr2llvmbb[index] = basic_block;
+                    }
+                    else
+                    {
+                        basic_block = this->addr2llvmbb[index];
+                    }
+                    irbuilder.SetInsertPoint(basic_block);
+
+                    this->call_jmp = false;
+                    this->is_ret = false;
+                    this->jmp_op = false;
+
+                    switch (this->p_to_code[index])
+                    {
+                    case RET:
+                        irbuilder.CreateRet(nullptr);
+                        index++;
+                        this->is_ret = true;
+                        this->state = END_NORMAL;
+                        continue;
+                    case NOP:
+                        index++;
+                        this->state = END_NORMAL;
+                        continue;
+                    case PUSHAD:
+                        //TODO
+                        continue;
+                    case POPAD:
+                        //TODO
+                        continue;
+                    case ERROR:
+                        irbuilder.CreateRet(nullptr);
+                        index++;
+                        this->state = END_NORMAL;
+                        continue;
+                    case CALL:
+                        this->call_jmp = true;
+                        break;
+                    case JMP:
+                        this->jmp_op = true;
+                        break;
+                    default:
+                        break;
+                    }
+
+                    std::vector<uint8_t> two_opcodes = {
+                        this->p_to_code[index],
+                        this->p_to_code[index + 1]};
+
+                    index += 2;
+
+                    instruction = static_cast<instructions>(two_opcodes[0]);
+
+                    operandStruct = this->getOperandStruct(two_opcodes[1]);
+                    mapsOfOperands = this->getMapsFromOperandStruct(operandStruct);
+
+                    if ((two_opcodes[0] >= JZ) && (two_opcodes[0] <= JBE))
+                    {
+                        this->state = GET_JC_OPERANDS;
+                    }
+                    else
+                    {
+                        this->state = GET_OPERANDS;
+                    }
+                }
+                else if (this->state == GET_JC_OPERANDS)
+                {
+                    uint32_t offsets_to_jump;
+                    llvm::Value *l = nullptr;
+                    llvm::Value *r = nullptr;
+                    llvm::BasicBlock *next_addr = nullptr;
+                    llvm::BasicBlock *jump_addr = nullptr;
+
+                    // prepare destination to jump
+                    if (mapsOfOperands[0]["type"] == IMMEDIATE)
+                    {
+                        offsets_to_jump = this->getImmediateValue(mapsOfOperands[0]["size"]);
+
+                        // create a basic block for the offset where to jump
+                        if (this->addr2llvmbb.find(offsets_to_jump) == this->addr2llvmbb.end())
+                        {
+                            jump_addr = this->genaytyk_translator->createBB(current_function, std::to_string(offsets_to_jump));
+                            this->addr2llvmbb[offsets_to_jump] = jump_addr;
+                        }
+                        else
+                        {
+                            jump_addr = this->addr2llvmbb[offsets_to_jump];
+                        }
+                    }
+
+                    for (size_t i = 1; i < mapsOfOperands.size(); i++)
+                    {
+                        switch (mapsOfOperands[i]["type"]) // check operand types
+                        {
+                        case IMMEDIATE:
+                            if (l == nullptr)
+                                l = irbuilder.getInt32(getImmediateValue(mapsOfOperands[i]["size"]));
+                            else if (r == nullptr)
+                                r = irbuilder.getInt32(getImmediateValue(mapsOfOperands[i]["size"]));
+                            break;
+                        case REGISTER:
+                            // check and get register from the opcode
+                            if (l == nullptr)
+                                l = this->genaytyk_translator->getRegister(p_to_code[index]);
+                            else if (r == nullptr)
+                                r = this->genaytyk_translator->getRegister(p_to_code[index]);
+                            index++;
+                            break;
+                        case ADDRESS:
+                            if (l == nullptr)
+                            {
+                                l = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, this->genaytyk_translator->getRegister(p_to_code[index]));
+                                l = this->genaytyk_translator->load(l, irbuilder, irbuilder.getInt32Ty());
+                            }
+                            else if (r == nullptr)
+                            {
+                                r = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, this->genaytyk_translator->getRegister(p_to_code[index]));
+                                r = this->genaytyk_translator->load(l, irbuilder, irbuilder.getInt32Ty());
+                            }
+                            index++;
+                            break;
+                        case SERIAL_HASH:
+                            if (l == nullptr)
+                            {
+                                l = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, irbuilder.getInt32(getImmediateValue(mapsOfOperands[i]["size"])));
+                                l = this->genaytyk_translator->load(l, irbuilder, irbuilder.getInt32Ty());
+                            }
+                            else if (r == nullptr)
+                            {
+                                r = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, irbuilder.getInt32(getImmediateValue(mapsOfOperands[i]["size"])));
+                                r = this->genaytyk_translator->load(r, irbuilder, irbuilder.getInt32Ty());
+                            }
+                        default:
+                            break;
+                        }
+                    }
+
+                    // now create the basic block for the next address
+                    if (this->addr2llvmbb.find(index) == this->addr2llvmbb.end())
+                    {
+                        next_addr = this->genaytyk_translator->createBB(current_function, std::to_string(index));
+                        this->addr2llvmbb[index] = next_addr;
+                    }
+                    else
+                    {
+                        next_addr = this->addr2llvmbb[index];
+                    }
+
+                    // now create the jump
+                    switch (instruction)
+                    {
+                    case JZ:
+                        this->genaytyk_translator->translateCreateJZ(l, r, jump_addr, next_addr, irbuilder);
+                        break;
+                    case JNZ:
+                        this->genaytyk_translator->translateCreateJNZ(l, r, jump_addr, next_addr, irbuilder);
+                        break;
+                    case JA:
+                        this->genaytyk_translator->translateCreateJA(l, r, jump_addr, next_addr, irbuilder);
+                        break;
+                    case JB:
+                        this->genaytyk_translator->translateCreateJB(l, r, jump_addr, next_addr, irbuilder);
+                        break;
+                    case JNB:
+                        this->genaytyk_translator->translateCreateJNB(l, r, jump_addr, next_addr, irbuilder);
+                        break;
+                    case JBE:
+                        this->genaytyk_translator->translateCreateJBE(l, r, jump_addr, next_addr, irbuilder);
+                        break;
+                    default:
+                        break;
+                    }
+                
+                    this->state = END_NORMAL;
+                }
+                
+            }
         }
 
         //
@@ -111,40 +339,91 @@ namespace genaytyk
         void Genaytyk_Disassembler::initializeInstruction2Str()
         {
             std::map<uint32_t, std::string> i2s =
-            {
-                {MOV, "MOV"},
-                {ADD, "ADD"},
-                {SUB, "SUB"},
-                {IMUL, "IMUL"},
-                {IDIV, "IDIV"},
-                {OR, "OR"},
-                {XOR, "XOR"},
-                {AND, "AND"},
-                {INC, "INC"},
-                {DEC, "DEC"},
-                {NOT, "NOT"},
-                {SHR, "SHR"},
-                {SHL, "SHL"},
-                {ROR, "ROR"},
-                {ROL, "ROL"},
-                {JMP, "JMP"},
-                {JZ, "JZ"},
-                {JNZ, "JNZ"},
-                {JA, "JA"},
-                {JB, "JB"},
-                {JNB, "JNB"},
-                {JBE, "JBE"},
-                {CALL, "CALL"},
-                {PUSH, "PUSH"},
-                {POP, "POP"},
-                {RET, "RET"},
-                {NOP, "NOP"},
-                {PUSHAD, "PUSHAD"},
-                {POPAD, "POPAD"},
-                {ERROR, "ERROR"}
-            };
+                {
+                    {MOV, "MOV"},
+                    {ADD, "ADD"},
+                    {SUB, "SUB"},
+                    {IMUL, "IMUL"},
+                    {IDIV, "IDIV"},
+                    {OR, "OR"},
+                    {XOR, "XOR"},
+                    {AND, "AND"},
+                    {INC, "INC"},
+                    {DEC, "DEC"},
+                    {NOT, "NOT"},
+                    {SHR, "SHR"},
+                    {SHL, "SHL"},
+                    {ROR, "ROR"},
+                    {ROL, "ROL"},
+                    {JMP, "JMP"},
+                    {JZ, "JZ"},
+                    {JNZ, "JNZ"},
+                    {JA, "JA"},
+                    {JB, "JB"},
+                    {JNB, "JNB"},
+                    {JBE, "JBE"},
+                    {CALL, "CALL"},
+                    {PUSH, "PUSH"},
+                    {POP, "POP"},
+                    {RET, "RET"},
+                    {NOP, "NOP"},
+                    {PUSHAD, "PUSHAD"},
+                    {POPAD, "POPAD"},
+                    {ERROR, "ERROR"}};
 
             this->instr2str = std::move(i2s);
+        }
+
+        void Genaytyk_Disassembler::initializeGlobalData(llvm::IRBuilder<> &irbuilder)
+        {
+            llvm::Type *charTy = irbuilder.getInt1Ty();
+            llvm::Type *i32Ty = irbuilder.getInt32Ty();
+
+            // create hardcoded var
+            llvm::Type *hardcodedType = llvm::VectorType::get(charTy, strlen("aAb0cBd1eCf2gDh3jEk4lFm5nGp6qHr7sJt8uKv9w") + 1);
+            auto *hardcodedString = genaytyk_translator->translateCreateGlobal(hardcodedType, "HardcodedString");
+            llvm::Constant *hardcodedString_value = llvm::ConstantDataArray::getString(this->module->getContext(), "aAb0cBd1eCf2gDh3jEk4lFm5nGp6qHr7sJt8uKv9w", true);
+            hardcodedString->setAlignment(1);
+            hardcodedString->setInitializer(hardcodedString_value);
+
+            this->hardcodedString = hardcodedString;
+
+            // aOkay_guy string
+            llvm::Type *okay_guy_type = llvm::VectorType::get(charTy, strlen("OKAY_GUY") + 1);
+            auto *okay_guy = genaytyk_translator->translateCreateGlobal(okay_guy_type, "OKAY_GUY");
+            llvm::Constant *okay_guy_value = llvm::ConstantDataArray::getString(this->module->getContext(), "OKAY_GUY", true);
+            okay_guy->setAlignment(1);
+            okay_guy->setInitializer(okay_guy_value);
+
+            // hashed name
+            llvm::Type *hashName_type = llvm::VectorType::get(charTy, 0x5f);
+            genaytyk_translator->translateCreateGlobal(hashName_type, "hash_name");
+
+            // vector of 9 bytes empty
+            llvm::Type *nine_size_vector = llvm::VectorType::get(charTy, 9);
+            genaytyk_translator->translateCreateGlobal(nine_size_vector, "global1");
+
+            // MySerialHash
+            genaytyk_translator->translateCreateGlobal(i32Ty, "MySerialHash");
+
+            // two dd unused
+            genaytyk_translator->translateCreateGlobal(i32Ty, "global2");
+            genaytyk_translator->translateCreateGlobal(i32Ty, "global3");
+
+            // vector of 0x14 bytes empty
+            llvm::Type *twenty_size_vector = llvm::VectorType::get(charTy, 0x14);
+            genaytyk_translator->translateCreateGlobal(twenty_size_vector, "global4");
+
+            // MyName & MySerial field
+            llvm::Type *name_serial_vector = llvm::VectorType::get(charTy, 0x25);
+            genaytyk_translator->translateCreateGlobal(name_serial_vector, "MyName");
+            genaytyk_translator->translateCreateGlobal(name_serial_vector, "MySerial");
+
+            // nameLength
+            genaytyk_translator->translateCreateGlobal(i32Ty, "nameLength");
+
+            // finalComparison
+            genaytyk_translator->translateCreateGlobal(i32Ty, "finalComparison");
         }
         //
         //==============================================================================
@@ -153,6 +432,67 @@ namespace genaytyk
         //
         std::string Genaytyk_Disassembler::getOperationString(uint8_t opcode)
         {
+            if (opcode > ERROR)
+            {
+                return "";
+            }
+
+            return this->instr2str[opcode];
+        }
+
+        std::vector<uint8_t> Genaytyk_Disassembler::getOperandStruct(uint8_t opcode)
+        {
+            if ((opcode < 1) || (opcode > this->operandStruct.size()))
+            {
+                throw Disassembler_Exception("Opcode not in operand struct");
+            }
+
+            opcode -= 1;
+            return this->operandStruct[opcode];
+        }
+
+        std::vector<std::map<std::string, uint8_t>> Genaytyk_Disassembler::getMapsFromOperandStruct(std::vector<uint8_t> operandStruct)
+        {
+            std::vector<std::map<std::string, uint8_t>> operands;
+
+            if ((operandStruct[0] <= 3) && (operandStruct[0] >= 1))
+            {
+                operands.push_back(
+                    {{"size", operandStruct[1]},
+                     {"type", operandStruct[2]}});
+            }
+
+            if ((operandStruct[0] <= 3) && (operandStruct[0] >= 2))
+            {
+                operands.push_back(
+                    {{"size", operandStruct[3]},
+                     {"type", operandStruct[4]}});
+            }
+
+            if (operandStruct[0] == 3)
+            {
+                operands.push_back(
+                    {{"size", operandStruct[5]},
+                     {"type", operandStruct[6]}});
+            }
+
+            return operands;
+        }
+
+        uint32_t Genaytyk_Disassembler::getImmediateValue(uint8_t sizeOfImmediate)
+        {
+            uint32_t value = 0;
+            uint8_t aux = 0;
+
+            while (sizeOfImmediate != 0)
+            {
+                aux = this->p_to_code[this->index];
+                this->index++;
+                value |= (aux << (8 * (sizeOfImmediate - 1)));
+                sizeOfImmediate--;
+            };
+
+            return value;
         }
 
     } // namespace disassembler
