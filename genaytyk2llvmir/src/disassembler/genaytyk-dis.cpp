@@ -49,6 +49,15 @@ namespace genaytyk
                         break;
                     }
                     this->state = GET_OPERATION;
+
+                    llvm::outs() << "\nDo you want to continue disassembling?\n";
+
+                    if (getchar() == 'n')
+                        return;
+
+                    while ((getchar()) != '\n')
+                        ;
+
                     continue;
                 }
                 else if (this->state == GET_OPERATION)
@@ -82,7 +91,7 @@ namespace genaytyk
                     switch (this->p_to_code[index])
                     {
                     case RET:
-                        irbuilder.CreateRet(nullptr);
+                        irbuilder.CreateRet(this->genaytyk_translator->loadRegister(REG_EAX, irbuilder, irbuilder.getInt32Ty()));
                         index++;
                         this->is_ret = true;
                         this->state = END_NORMAL;
@@ -144,17 +153,6 @@ namespace genaytyk
                     if (mapsOfOperands[0]["type"] == IMMEDIATE)
                     {
                         offsets_to_jump = this->getImmediateValue(mapsOfOperands[0]["size"]);
-
-                        // create a basic block for the offset where to jump
-                        if (this->addr2llvmbb.find(offsets_to_jump) == this->addr2llvmbb.end())
-                        {
-                            jump_addr = this->genaytyk_translator->createBB(current_function, std::to_string(offsets_to_jump));
-                            this->addr2llvmbb[offsets_to_jump] = jump_addr;
-                        }
-                        else
-                        {
-                            jump_addr = this->addr2llvmbb[offsets_to_jump];
-                        }
                     }
 
                     for (size_t i = 1; i < mapsOfOperands.size(); i++)
@@ -215,6 +213,17 @@ namespace genaytyk
                         next_addr = this->addr2llvmbb[index];
                     }
 
+                    // create a basic block for the offset where to jump
+                    if (this->addr2llvmbb.find(offsets_to_jump) == this->addr2llvmbb.end())
+                    {
+                        jump_addr = this->genaytyk_translator->createBB(current_function, std::to_string(offsets_to_jump));
+                        this->addr2llvmbb[offsets_to_jump] = jump_addr;
+                    }
+                    else
+                    {
+                        jump_addr = this->addr2llvmbb[offsets_to_jump];
+                    }
+
                     // now create the jump
                     switch (instruction)
                     {
@@ -239,10 +248,284 @@ namespace genaytyk
                     default:
                         break;
                     }
-                
+
                     this->state = END_NORMAL;
                 }
-                
+                else if (this->state == GET_OPERANDS)
+                {
+                    llvm::Value *l = nullptr;
+                    llvm::Value *r = nullptr;
+                    bool l_is_register = false;
+                    bool r_is_register = false;
+                    uint8_t l_register = 0;
+                    uint8_t r_register = 0;
+
+                    for (size_t i = 0; i < mapsOfOperands.size(); i++)
+                    {
+                        if (mapsOfOperands[i]["type"] == IMMEDIATE)
+                        {
+                            uint32_t offset = getImmediateValue(mapsOfOperands[i]["size"]);
+
+                            if (call_jmp)
+                            {
+                                // it is a call check if function exists or create it
+                                llvm::Function *callee;
+                                if (this->addr2llvmfunc.find(offset) == this->addr2llvmfunc.end())
+                                {
+                                    callee = this->genaytyk_translator->createFunc(irbuilder, std::to_string(offset), irbuilder.getVoidTy(), irbuilder.getVoidTy());
+                                    this->addr2llvmfunc[offset] = callee;
+                                }
+                                else
+                                {
+                                    callee = this->addr2llvmfunc[offset];
+                                }
+                                // create a call to a function
+                                auto* return_value = this->genaytyk_translator->translateCreateCall(callee, irbuilder);
+                                this->genaytyk_translator->storeRegister(REG_EAX, irbuilder, return_value);
+                            }
+                            else
+                            {
+                                if (l == nullptr)
+                                    l = irbuilder.getInt32(offset);
+                                else if (r == nullptr)
+                                    r = irbuilder.getInt32(offset);
+                            }
+                        }
+                        else if (mapsOfOperands[i]["type"] == REGISTER)
+                        {
+                            uint8_t opcodeRegister = this->p_to_code[index];
+                            index++;
+                            if (l == nullptr)
+                            {
+                                l_is_register = true;
+                                l_register = opcodeRegister;
+                                l = this->genaytyk_translator->getRegister(opcodeRegister);
+                            }
+                            else if (r == nullptr)
+                            {
+                                r_is_register = true;
+                                r_register = opcodeRegister;
+                                r = this->genaytyk_translator->getRegister(opcodeRegister);
+                            }
+                        }
+                        else if (mapsOfOperands[i]["type"] == ADDRESS)
+                        {
+                            if (l == nullptr)
+                            {
+                                l = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, this->genaytyk_translator->getRegister(p_to_code[index]));
+                                l = this->genaytyk_translator->load(l, irbuilder, irbuilder.getInt32Ty());
+                            }
+                            else if (r == nullptr)
+                            {
+                                r = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, this->genaytyk_translator->getRegister(p_to_code[index]));
+                                r = this->genaytyk_translator->load(l, irbuilder, irbuilder.getInt32Ty());
+                            }
+                            index++;
+                            break;
+                        }
+                        else if (mapsOfOperands[i]["type"] == SERIAL_HASH)
+                        {
+                            if (l == nullptr)
+                            {
+                                l = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, irbuilder.getInt32(getImmediateValue(mapsOfOperands[i]["size"])));
+                                l = this->genaytyk_translator->load(l, irbuilder, irbuilder.getInt32Ty());
+                            }
+                            else if (r == nullptr)
+                            {
+                                r = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, irbuilder.getInt32(getImmediateValue(mapsOfOperands[i]["size"])));
+                                r = this->genaytyk_translator->load(r, irbuilder, irbuilder.getInt32Ty());
+                            }
+                        }
+                        else
+                        {
+                            throw Disassembler_Exception("Error type not supported\n");
+                        }
+                    }
+
+                    switch (instruction)
+                    {
+                    case MOV:
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case ADD:
+                        this->genaytyk_translator->translateAdd(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case SUB:
+                        this->genaytyk_translator->translateSub(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case IMUL:
+                        this->genaytyk_translator->translateImul(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case IDIV:
+                        this->genaytyk_translator->translateIdiv(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case OR:
+                        this->genaytyk_translator->translateOr(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case XOR:
+                        this->genaytyk_translator->translateXor(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case AND:
+                        this->genaytyk_translator->translateAnd(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case INC:
+                        this->genaytyk_translator->translateInc(l, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case DEC:
+                        this->genaytyk_translator->translateDec(l, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case NOT:
+                        this->genaytyk_translator->translateNot(l, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case SHR:
+                        this->genaytyk_translator->translateShr(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case SHL:
+                        this->genaytyk_translator->translateShl(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case ROR:
+                        this->genaytyk_translator->translateRor(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    case ROL:
+                        this->genaytyk_translator->translateRol(l, r, irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, r);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(l, irbuilder, r);
+                        }
+                        break;
+                    default:
+                        break;
+                    }
+
+                    this->state = END_NORMAL;
+                    continue;
+                }
+                else if (state == END_NORMAL)
+                {
+                    if (is_ret)
+                    {
+                        is_in_call = false;
+                    }
+
+                    state = INIT;
+
+                    continue;
+                }
             }
         }
 

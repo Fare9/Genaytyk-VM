@@ -237,7 +237,7 @@ namespace genaytyk
         return ret;
     }
 
-    llvm::StoreInst *store(llvm::Value *addr, llvm::IRBuilder<> &irbuilder, llvm::Value *val)
+    llvm::StoreInst *GenaytykLlvmIrTranslatorGenaytyk_impl::store(llvm::Value *addr, llvm::IRBuilder<> &irbuilder, llvm::Value *val)
     {
         return irbuilder.CreateStore(val, addr);
     }
@@ -336,14 +336,14 @@ namespace genaytyk
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJZ(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value *jz_condition = irbuilder.CreateICmpEQ(l, r);
+        llvm::Value *jz_condition = irbuilder.CreateICmpEQ(l, r, "cmptmp");
 
         return irbuilder.CreateCondBr(jz_condition, destination, next_addr);
     }
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJNZ(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value *jnz_condition = irbuilder.CreateICmpNE(l, r);
+        llvm::Value *jnz_condition = irbuilder.CreateICmpNE(l, r, "ifcond");
 
         return irbuilder.CreateCondBr(jnz_condition, destination, next_addr);
     }

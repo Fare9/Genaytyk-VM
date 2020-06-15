@@ -8,6 +8,7 @@ static llvm::LLVMContext &context = llvm::getGlobalContext();
 static llvm::Module *moduleOb = new llvm::Module("genaytyk", context);
 static llvm::IRBuilder<> irbuilder(context);
 
+/*
 int main(int argc, char **argv)
 {
     if (argc != 2)
@@ -36,8 +37,8 @@ int main(int argc, char **argv)
 
     return 0;
 }
+*/
 
-/*
 int
 main(int argc, char **argv)
 {
@@ -76,8 +77,8 @@ main(int argc, char **argv)
 
     auto* next_basic_block = genaytyk_translator->createBB(entry_point_function, "next_addr");
     auto* jump_address = genaytyk_translator->createBB(entry_point_function, "jump_address");
-
-    genaytyk_translator->translateCreateJNZ(genaytyk_translator->getRegister(genaytyk::REG_EAX), irbuilder.getInt32(0), jump_address, next_basic_block, irbuilder);
+    
+    genaytyk_translator->translateCreateJNZ(genaytyk_translator->getRegister(genaytyk::REG_EAX), genaytyk_translator->getRegister(genaytyk::REG_EBX), jump_address, next_basic_block, irbuilder);
 
     irbuilder.SetInsertPoint(next_basic_block);
 
@@ -93,4 +94,3 @@ main(int argc, char **argv)
 
     return 0;
 }
-*/
