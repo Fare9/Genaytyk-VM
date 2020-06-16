@@ -77,7 +77,7 @@ namespace genaytyk
 
         auto *reg_type = getRegisterType(reg_);
         auto parent_reg = getParentRegister(reg_);
-        auto *reg = getRegister(reg_);
+        auto *reg = getRegister(parent_reg);
         if (reg == nullptr)
         {
             throw Genaytyk_Exception("GenaytykLlvmIrTranslatorGenaytyk_impl::loadRegister unhandled register");
@@ -126,7 +126,7 @@ namespace genaytyk
 
         auto *reg_type = getRegisterType(reg_);
         auto parent_reg = getParentRegister(reg_);
-        auto *reg = getRegister(reg_);
+        auto *reg = getRegister(parent_reg);
 
         if (reg == nullptr)
         {
@@ -160,6 +160,7 @@ namespace genaytyk
             // in other case, it's necessary to preserve
             // values from other parts
             llvm::Value *l = irbuilder.CreateLoad(reg);
+
             if (!(l->getType()->isIntegerTy(16) || l->getType()->isIntegerTy(32) || l->getType()->isIntegerTy(64)))
             {
                 throw Genaytyk_Exception("Unexpected parent type.");
@@ -313,15 +314,13 @@ namespace genaytyk
     /// taken from: https://en.wikipedia.org/wiki/Circular_shift#Implementing_circular_shifts
     llvm::Value *GenaytykLlvmIrTranslatorGenaytyk_impl::translateRor(llvm::Value *l, llvm::Value *r, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::ArrayRef<llvm::Value *> params = {l, r};
-        auto *ror = irbuilder.CreateCall(ror_function, params);
+        auto *ror = irbuilder.CreateCall(ror_function, {l, r});
         return ror;
     }
 
     llvm::Value *GenaytykLlvmIrTranslatorGenaytyk_impl::translateRol(llvm::Value *l, llvm::Value *r, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::ArrayRef<llvm::Value *> params = {l, r};
-        auto *rol = irbuilder.CreateCall(rol_function, params);
+        auto *rol = irbuilder.CreateCall(rol_function, {l, r});
         return rol;
     }
     //
@@ -336,42 +335,42 @@ namespace genaytyk
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJZ(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value *jz_condition = irbuilder.CreateICmpEQ(l, r, "cmptmp");
+        llvm::Value* jz_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_EQ, l, r), "ifcond");
 
         return irbuilder.CreateCondBr(jz_condition, destination, next_addr);
     }
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJNZ(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value *jnz_condition = irbuilder.CreateICmpNE(l, r, "ifcond");
+        llvm::Value *jnz_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_NE, l, r), "ifcond");
 
         return irbuilder.CreateCondBr(jnz_condition, destination, next_addr);
     }
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJA(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value *ja_condition = irbuilder.CreateICmpUGT(l, r);
+        llvm::Value* ja_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_UGT, l, r), "ifcond");
 
         return irbuilder.CreateCondBr(ja_condition, destination, next_addr);
     }
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJB(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value *jb_condition = irbuilder.CreateICmpULT(l, r);
+        llvm::Value* jb_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_ULT, l, r), "ifcond");
 
         return irbuilder.CreateCondBr(jb_condition, destination, next_addr);
     }
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJNB(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value *jnb_condition = irbuilder.CreateICmpUGE(l, r); // jnb == jae
+        llvm::Value* jnb_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_UGE, l, r), "ifcond"); // jnb == jae
 
         return irbuilder.CreateCondBr(jnb_condition, destination, next_addr);
     }
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJBE(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value *jbe_condition = irbuilder.CreateICmpULE(l, r);
+        llvm::Value* jbe_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_ULE, l, r), "ifcond");
 
         return irbuilder.CreateCondBr(jbe_condition, destination, next_addr);
     }

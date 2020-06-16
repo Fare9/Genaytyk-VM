@@ -8,7 +8,7 @@ static llvm::LLVMContext &context = llvm::getGlobalContext();
 static llvm::Module *moduleOb = new llvm::Module("genaytyk", context);
 static llvm::IRBuilder<> irbuilder(context);
 
-/*
+
 int main(int argc, char **argv)
 {
     if (argc != 2)
@@ -37,8 +37,9 @@ int main(int argc, char **argv)
 
     return 0;
 }
-*/
 
+
+/*
 int
 main(int argc, char **argv)
 {
@@ -73,16 +74,19 @@ main(int argc, char **argv)
 
     auto* add_instruction = genaytyk_translator->translateAdd(genaytyk_translator->getRegister(genaytyk::REG_EAX), irbuilder.getInt32(5), irbuilder);
 
-    genaytyk_translator->storeRegister(genaytyk::REG_EAX, irbuilder, add_instruction);
+    auto* a1 = genaytyk_translator->storeRegister(genaytyk::REG_EAX, irbuilder, add_instruction);
 
     auto* next_basic_block = genaytyk_translator->createBB(entry_point_function, "next_addr");
     auto* jump_address = genaytyk_translator->createBB(entry_point_function, "jump_address");
+
+    auto* a2 = genaytyk_translator->storeRegister(genaytyk::REG_EBX,irbuilder,irbuilder.getInt32(2));
+    auto* a3 = genaytyk_translator->loadRegister(genaytyk::REG_EBX,irbuilder,irbuilder.getInt32Ty());
     
     genaytyk_translator->translateCreateJNZ(genaytyk_translator->getRegister(genaytyk::REG_EAX), genaytyk_translator->getRegister(genaytyk::REG_EBX), jump_address, next_basic_block, irbuilder);
 
     irbuilder.SetInsertPoint(next_basic_block);
 
-    auto* add_instruction2 = genaytyk_translator->translateAdd(genaytyk_translator->getRegister(genaytyk::REG_0x24), irbuilder.getInt32(2), irbuilder);
+    auto* add_instruction2 = genaytyk_translator->translateAdd(genaytyk_translator->getRegister(genaytyk::REG_0x24), add_instruction, irbuilder);
 
     genaytyk_translator->storeRegister(genaytyk::REG_0x24, irbuilder, add_instruction2);
 
@@ -94,3 +98,4 @@ main(int argc, char **argv)
 
     return 0;
 }
+*/
