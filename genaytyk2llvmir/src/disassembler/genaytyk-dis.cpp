@@ -25,9 +25,14 @@ namespace genaytyk
         void Genaytyk_Disassembler::disassemble(llvm::IRBuilder<> &irbuilder)
         {
             llvm::Function *current_function;
+            llvm::BasicBlock* current_basic_block;
             std::vector<uint8_t> operandStruct;
             std::vector<std::map<std::string, uint8_t>> mapsOfOperands;
             instructions instruction;
+
+            uint32_t until;
+            printf("Tell me which line of index do you want to stop: ");
+            scanf("%u", &until);
 
             while (true)
             {
@@ -44,21 +49,12 @@ namespace genaytyk
                 }
                 else if (this->state == INIT)
                 {
-                    if (this->index >= this->size_of_code)
+                    if ( (this->index >= this->size_of_code) || (this->index >= until))
                     {
                         break;
                     }
                     this->state = GET_OPERATION;
 
-                    
-                    llvm::outs() << "\nDo you want to continue disassembling?\n";
-
-                    if (getchar() == 'n')
-                        return;
-
-                    while ((getchar()) != '\n')
-                        ;
-                    
                     continue;
                 }
                 else if (this->state == GET_OPERATION)
@@ -66,7 +62,7 @@ namespace genaytyk
                     llvm::BasicBlock *basic_block;
                     auto it = this->addr2llvmfunc.find(index);
 
-                   printf("Address of instructino to disassemble: %x\n", index);
+                   //printf("Address of instructino to disassemble: %x\n", index);
 
                     if (it != this->addr2llvmfunc.end())
                     {
@@ -84,8 +80,14 @@ namespace genaytyk
                     else
                     {
                         basic_block = this->addr2llvmbb[index];
+
+                        // if basic block exists, probably it was created for a jump,
+                        // move it to current position
+                        if (current_basic_block != nullptr)
+                            basic_block->moveAfter(current_basic_block); // current basic block is always the previous one
                     }
                     irbuilder.SetInsertPoint(basic_block);
+                    current_basic_block = basic_block; // to set correctly the basic blocks on jumps
 
                     this->call_jmp = false;
                     this->is_ret = false;
@@ -285,6 +287,21 @@ namespace genaytyk
                                 // create a call to a function
                                 this->genaytyk_translator->translateCreateCall(callee, irbuilder);
                             }
+                            else if (jmp_op)
+                            {
+                                llvm::BasicBlock *jumped;
+                                if (this->addr2llvmbb.find(offset) == this->addr2llvmbb.end())
+                                {
+                                    jumped = this->genaytyk_translator->createBB(current_function, std::to_string(offset));
+                                    this->addr2llvmbb[offset] = jumped;
+                                }
+                                else
+                                {
+                                    jumped = this->addr2llvmbb[offset];
+                                }
+                                // create a jump to the address
+                                this->genaytyk_translator->translateCreateJMP(jumped, irbuilder);
+                            }
                             else
                             {
                                 if (l == nullptr)
@@ -321,7 +338,7 @@ namespace genaytyk
                             {
                                 auto* reg_value = this->genaytyk_translator->getRegister(p_to_code[index]);
                                 r = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, reg_value);
-                                r = this->genaytyk_translator->load(l, irbuilder, irbuilder.getInt32Ty());
+                                r = this->genaytyk_translator->load(r, irbuilder, irbuilder.getInt32Ty());
                             }
                             index++;
                         }
