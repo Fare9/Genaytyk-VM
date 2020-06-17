@@ -32,7 +32,7 @@ CXXFLAGS=$(shell echo $(CXXFLAGS_LINE) | sed 's/O3/O0/')
 endif
 CPPFLAGS+=$(shell $(LLVM_CONFIG) --cppflags) -I $(SRC_GENAYTYK_DIR) -I $(SRC_DISASSEMBLER_DIR)
 # FLAGS FOR USED LIBS
-LLVMLIBS=$(shell $(LLVM_CONFIG) --libs core support)
+LLVMLIBS=$(shell $(LLVM_CONFIG) --libs bitwriter core support)
 SYSTEMLIBS=$(shell $(LLVM_CONFIG) --system-libs)
 
 .PHONY: clean remove
