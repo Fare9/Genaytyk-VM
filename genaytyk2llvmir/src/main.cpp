@@ -4,6 +4,12 @@
 #include <iostream>
 #include <fstream>
 
+// for writing
+#include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Support/ToolOutputFile.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/raw_ostream.h"
+
 static llvm::LLVMContext &context = llvm::getGlobalContext();
 static llvm::Module *moduleOb = new llvm::Module("genaytyk", context);
 static llvm::IRBuilder<> irbuilder(context);
@@ -11,6 +17,13 @@ static llvm::IRBuilder<> irbuilder(context);
 
 int main(int argc, char **argv)
 {
+    std::unique_ptr<llvm::tool_output_file> Out(
+        new llvm::tool_output_file(
+            "./genaytyk.bc",
+            llvm::sys::fs::F_None 
+        )
+    );
+
     if (argc != 2)
     {
         llvm::outs() << "[-] USAGE: " << argv[0] << " <file_with_code>\n";
