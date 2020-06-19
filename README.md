@@ -19,4 +19,8 @@ Here I have my notes about Genyatyk VM, I have my analysis of the binary (once u
 
 + Translator from Genaytyk virtual code to LLVM IR (compiled with LLVM 3.8.1): <a href="https://github.com/Fare9/Genaytyk-VM/tree/master/genaytyk2llvmir">genaytyk2llvmir</a>
 
++ Code of Genaytyk in LLVM IR: <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/genaytyk2llvmir/genaytyk.ll">genaytyk.ll</a>
+
 As you can see, I was not able to resolve the encrypt function =( I hope to continue learning how this function works and continue working with VMs.
+
+Finally I wrote the genaytyk VM code lifter with LLVM IR, so what you can find in <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/genaytyk2llvmir/genaytyk.ll">genaytyk.ll</a> it would be the LLVM IR version of <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/vm_instructions.txt">vm_instructions.txt</a> or <a href="https://github.com/Fare9/Genaytyk-VM/blob/master/vm_instructions.asm">vm_instructions.asm</a>. The translation library can be found in <a href="https://github.com/Fare9/Genaytyk-VM/tree/master/genaytyk2llvmir/src/genaytyk">genaytyk code lifter library</a>, and the disassembler code in <a href="https://github.com/Fare9/Genaytyk-VM/tree/master/genaytyk2llvmir/src/disassembler">genaytyk llvm ir disassembler</a>.
