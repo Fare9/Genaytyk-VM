@@ -323,6 +323,44 @@ namespace genaytyk
         auto *rol = irbuilder.CreateCall(rol_function, {l, r});
         return rol;
     }
+
+    void GenaytykLlvmIrTranslatorGenaytyk_impl::translatePushad(llvm::IRBuilder<> &irbuilder)
+    {
+        irbuilder.CreateCall(pushad);
+    }
+
+    void GenaytykLlvmIrTranslatorGenaytyk_impl::translatePopad(llvm::IRBuilder<> &irbuilder)
+    {
+        irbuilder.CreateCall(popad);
+    }
+
+    void GenaytykLlvmIrTranslatorGenaytyk_impl::translatePush(llvm::Value *val, llvm::IRBuilder<> &irbuilder)
+    {
+        auto* pt = llvm::PointerType::get(irbuilder.getInt32Ty(), 0);
+        auto* sp = this->getRegister(REG_ESP);
+        llvm::Value* c = irbuilder.getInt32(-4);
+
+        auto* a0 = sp;
+        auto* a1 = irbuilder.CreateAdd(a0, c);
+
+        irbuilder.CreateStore(val, irbuilder.CreateIntToPtr(a1, pt));
+        this->storeRegister(REG_ESP, irbuilder, a1);
+    }
+
+    llvm::Value *GenaytykLlvmIrTranslatorGenaytyk_impl::translatePop(llvm::IRBuilder<> &irbuilder)
+    {
+        auto* pt = llvm::PointerType::get(irbuilder.getInt32Ty(), 0);
+        auto* sp = this->getRegister(REG_ESP);
+        llvm::Value* c = irbuilder.getInt32(4);
+
+        auto* a1 = sp;
+        auto* a2 = irbuilder.CreateAdd(a1, c);
+
+        llvm::Value* ret = irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a1, pt));
+        this->storeRegister(REG_ESP, irbuilder, a2);
+        
+        return ret;
+    }
     //
     //==============================================================================
     // Genaytyk branching instruction translation methods.

@@ -25,14 +25,23 @@ namespace genaytyk
         void Genaytyk_Disassembler::disassemble(llvm::IRBuilder<> &irbuilder)
         {
             llvm::Function *current_function;
-            llvm::BasicBlock* current_basic_block;
+            llvm::BasicBlock *current_basic_block;
             std::vector<uint8_t> operandStruct;
             std::vector<std::map<std::string, uint8_t>> mapsOfOperands;
             instructions instruction;
 
+            llvm::Value *l = nullptr;
+            llvm::Value *r = nullptr;
+            bool l_is_register = false;
+            bool r_is_register = false;
+            uint8_t l_register = 0;
+            uint8_t r_register = 0;
+
+            /*
             uint32_t until;
             printf("Tell me which line of index do you want to stop: ");
             scanf("%u", &until);
+            */
 
             while (true)
             {
@@ -49,10 +58,18 @@ namespace genaytyk
                 }
                 else if (this->state == INIT)
                 {
-                    if ( (this->index >= this->size_of_code) || (this->index >= until))
+                    if (this->index >= this->size_of_code)// || (this->index >= until))
                     {
                         break;
                     }
+
+                    l = nullptr;
+                    r = nullptr;
+                    l_is_register = false;
+                    r_is_register = false;
+                    l_register = 0;
+                    r_register = 0;
+
                     this->state = GET_OPERATION;
 
                     continue;
@@ -61,8 +78,8 @@ namespace genaytyk
                 {
                     llvm::BasicBlock *basic_block;
                     auto it = this->addr2llvmfunc.find(index);
-
-                   //printf("Address of instructino to disassemble: %x\n", index);
+                    
+                    //printf("Address of instructino to disassemble: %x\n", index);
 
                     if (it != this->addr2llvmfunc.end())
                     {
@@ -96,6 +113,7 @@ namespace genaytyk
                     switch (this->p_to_code[index])
                     {
                     case RET:
+                        irbuilder.CreateRet(nullptr);
                         index++;
                         this->is_ret = true;
                         this->state = END_NORMAL;
@@ -105,10 +123,14 @@ namespace genaytyk
                         this->state = END_NORMAL;
                         continue;
                     case PUSHAD:
-                        //TODO
+                        this->genaytyk_translator->translatePushad(irbuilder);
+                        index++;
+                        this->state = END_NORMAL;
                         continue;
                     case POPAD:
-                        //TODO
+                        this->genaytyk_translator->translatePopad(irbuilder);
+                        index++;
+                        this->state = END_NORMAL;
                         continue;
                     case ERROR:
                         irbuilder.CreateRet(nullptr);
@@ -148,8 +170,6 @@ namespace genaytyk
                 else if (this->state == GET_JC_OPERANDS)
                 {
                     uint32_t offsets_to_jump;
-                    llvm::Value *l = nullptr;
-                    llvm::Value *r = nullptr;
                     llvm::BasicBlock *next_addr = nullptr;
                     llvm::BasicBlock *jump_addr = nullptr;
 
@@ -172,9 +192,17 @@ namespace genaytyk
                         case REGISTER:
                             // check and get register from the opcode
                             if (l == nullptr)
+                            {
+                                l_is_register = true;
+                                l_register = p_to_code[index];
                                 l = this->genaytyk_translator->getRegister(p_to_code[index]);
+                            }
                             else if (r == nullptr)
+                            {
+                                r_is_register = true;
+                                r_register = p_to_code[index];
                                 r = this->genaytyk_translator->getRegister(p_to_code[index]);
+                            }
                             index++;
                             break;
                         case ADDRESS:
@@ -186,7 +214,7 @@ namespace genaytyk
                             else if (r == nullptr)
                             {
                                 r = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, this->genaytyk_translator->getRegister(p_to_code[index]));
-                                r = this->genaytyk_translator->load(l, irbuilder, irbuilder.getInt32Ty());
+                                r = this->genaytyk_translator->load(r, irbuilder, irbuilder.getInt32Ty());
                             }
                             index++;
                             break;
@@ -258,13 +286,8 @@ namespace genaytyk
                 }
                 else if (this->state == GET_OPERANDS)
                 {
-                    llvm::Value *l = nullptr;
-                    llvm::Value *r = nullptr;
-                    bool l_is_register = false;
-                    bool r_is_register = false;
-                    uint8_t l_register = 0;
-                    uint8_t r_register = 0;
-
+                    llvm::Value* store_addr;
+                    
                     for (size_t i = 0; i < mapsOfOperands.size(); i++)
                     {
                         if (mapsOfOperands[i]["type"] == IMMEDIATE)
@@ -331,12 +354,15 @@ namespace genaytyk
                         {
                             if (l == nullptr)
                             {
-                                auto* reg_value = this->genaytyk_translator->getRegister(p_to_code[index]);
+                                auto *reg_value = this->genaytyk_translator->getRegister(p_to_code[index]);
                                 l = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, reg_value);
+                                store_addr = l;
+                                if (instruction != MOV)
+                                    l = this->genaytyk_translator->load(l, irbuilder, irbuilder.getInt32Ty());
                             }
                             else if (r == nullptr)
                             {
-                                auto* reg_value = this->genaytyk_translator->getRegister(p_to_code[index]);
+                                auto *reg_value = this->genaytyk_translator->getRegister(p_to_code[index]);
                                 r = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, reg_value);
                                 r = this->genaytyk_translator->load(r, irbuilder, irbuilder.getInt32Ty());
                             }
@@ -347,6 +373,9 @@ namespace genaytyk
                             if (l == nullptr)
                             {
                                 l = this->genaytyk_translator->getPointerFromAddress(irbuilder, irbuilder.getInt1Ty(), this->hardcodedString, irbuilder.getInt32(getImmediateValue(mapsOfOperands[i]["size"])));
+                                store_addr = l;
+                                if (instruction != MOV)
+                                    l = this->genaytyk_translator->load(l, irbuilder, irbuilder.getInt32Ty());
                             }
                             else if (r == nullptr)
                             {
@@ -370,7 +399,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, r);
+                            this->genaytyk_translator->store(store_addr, irbuilder, r);
                         }
                         break;
                     case ADD:
@@ -381,7 +410,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case SUB:
@@ -392,7 +421,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case IMUL:
@@ -403,7 +432,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case IDIV:
@@ -414,7 +443,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case OR:
@@ -425,7 +454,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case XOR:
@@ -436,7 +465,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case AND:
@@ -447,7 +476,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case INC:
@@ -458,7 +487,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case DEC:
@@ -469,7 +498,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case NOT:
@@ -480,7 +509,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case SHR:
@@ -491,7 +520,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case SHL:
@@ -502,7 +531,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case ROR:
@@ -513,7 +542,7 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     case ROL:
@@ -524,7 +553,21 @@ namespace genaytyk
                         }
                         else
                         {
-                            this->genaytyk_translator->store(l, irbuilder, result);
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
+                        }
+                        break;
+                    case PUSH:
+                        this->genaytyk_translator->translatePush(l, irbuilder);
+                        break;
+                    case POP:
+                        result = this->genaytyk_translator->translatePop(irbuilder);
+                        if (l_is_register)
+                        {
+                            this->genaytyk_translator->storeRegister(l_register, irbuilder, result);
+                        }
+                        else
+                        {
+                            this->genaytyk_translator->store(store_addr, irbuilder, result);
                         }
                         break;
                     default:

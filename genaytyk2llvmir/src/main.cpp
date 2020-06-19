@@ -48,6 +48,8 @@ int main(int argc, char **argv)
 
     moduleOb->dump();
 
+    llvm::outs() << "\n\nGenaytyk has been completely translated to LLVM IR\n\n";
+
     return 0;
 }
 

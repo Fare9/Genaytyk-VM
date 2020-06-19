@@ -245,6 +245,8 @@ namespace genaytyk
     {
         this->initializeRor(irbuilder);
         this->initializeRol(irbuilder);
+        this->initializePushad(irbuilder);
+        this->initializePopad(irbuilder);
     }
 
     void GenaytykLlvmIrTranslatorGenaytyk_impl::initializeRor(llvm::IRBuilder<> &irbuilder)
@@ -347,5 +349,105 @@ namespace genaytyk
         irbuilder.CreateRet(rol);
 
         this->rol_function = rol_function;
+    }
+
+    void GenaytykLlvmIrTranslatorGenaytyk_impl::initializePushad(llvm::IRBuilder<>& irbuilder)
+    {
+
+        llvm::FunctionType *funcType = llvm::FunctionType::get(
+            /*Type=*/irbuilder.getVoidTy(), // return type (int 32)
+            /*Params=*/irbuilder.getVoidTy(),
+            /*isVarArg=*/false);
+
+        auto *pushad_function = llvm::Function::Create(
+            /*FunctionType=*/funcType,
+            /*LinkageTypes=*/llvm::Function::ExternalLinkage, /* function can be accessed from external file */
+            /*Twine=*/"pushad",
+            /*Module=*/this->module);
+        
+        auto *entry = llvm::BasicBlock::Create(
+            this->module->getContext(),
+            "entry_pushad",
+            pushad_function);
+
+        irbuilder.SetInsertPoint(entry);
+
+        auto* pt = llvm::PointerType::get(irbuilder.getInt32Ty(), 0);
+        auto* sp = this->getRegister(REG_ESP);
+        llvm::Value* c = irbuilder.getInt32(-4);
+
+        // code from retdec for x86
+        auto* a0 = sp;
+        auto* a1 = irbuilder.CreateAdd(a0, c);
+        auto* a2 = irbuilder.CreateAdd(a1, c);
+        auto* a3 = irbuilder.CreateAdd(a2, c);
+        auto* a4 = irbuilder.CreateAdd(a3, c);
+        auto* a5 = irbuilder.CreateAdd(a4, c);
+        auto* a6 = irbuilder.CreateAdd(a5, c);
+        auto* a7 = irbuilder.CreateAdd(a6, c);
+        auto* a8 = irbuilder.CreateAdd(a7, c);
+
+        irbuilder.CreateStore(this->getRegister(REG_EAX), irbuilder.CreateIntToPtr(a1, pt));
+        irbuilder.CreateStore(this->getRegister(REG_ECX), irbuilder.CreateIntToPtr(a2, pt));
+        irbuilder.CreateStore(this->getRegister(REG_EDX), irbuilder.CreateIntToPtr(a3, pt));
+        irbuilder.CreateStore(this->getRegister(REG_EBX), irbuilder.CreateIntToPtr(a4, pt));
+        irbuilder.CreateStore(this->getRegister(REG_ESP), irbuilder.CreateIntToPtr(a5, pt));
+        irbuilder.CreateStore(this->getRegister(REG_EBP), irbuilder.CreateIntToPtr(a6, pt));
+        irbuilder.CreateStore(this->getRegister(REG_ESI), irbuilder.CreateIntToPtr(a7, pt));
+        irbuilder.CreateStore(this->getRegister(REG_EDI), irbuilder.CreateIntToPtr(a8, pt));
+        this->storeRegister(REG_ESP, irbuilder, a8);
+        
+        
+        irbuilder.CreateRet(irbuilder.getInt32(0));
+        this->pushad = pushad_function;
+    }
+
+    void GenaytykLlvmIrTranslatorGenaytyk_impl::initializePopad(llvm::IRBuilder<>& irbuilder)
+    {
+        llvm::FunctionType *funcType = llvm::FunctionType::get(
+            /*Type=*/irbuilder.getVoidTy(), // return type (int 32)
+            /*Params=*/irbuilder.getVoidTy(),
+            /*isVarArg=*/false);
+
+        auto *popad_function = llvm::Function::Create(
+            /*FunctionType=*/funcType,
+            /*LinkageTypes=*/llvm::Function::ExternalLinkage, /* function can be accessed from external file */
+            /*Twine=*/"popad",
+            /*Module=*/this->module);
+        
+        auto *entry = llvm::BasicBlock::Create(
+            this->module->getContext(),
+            "entry_popad",
+            popad_function);
+
+        irbuilder.SetInsertPoint(entry);
+
+        auto* pt = llvm::PointerType::get(irbuilder.getInt32Ty(), 0);
+        auto* sp = this->getRegister(REG_ESP);
+        llvm::Value* c = irbuilder.getInt32(4);
+
+        // code from retdec for x86
+        auto* a1 = sp;
+        auto* a2 = irbuilder.CreateAdd(a1, c);
+        auto* a3 = irbuilder.CreateAdd(a2, c);
+        auto* a4 = irbuilder.CreateAdd(a3, c);
+        auto* a5 = irbuilder.CreateAdd(a4, c);
+        auto* a6 = irbuilder.CreateAdd(a5, c);
+        auto* a7 = irbuilder.CreateAdd(a6, c);
+        auto* a8 = irbuilder.CreateAdd(a7, c);
+        auto* a9 = irbuilder.CreateAdd(a8, c);
+
+        this->storeRegister(REG_EDI,irbuilder, irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a1, pt)));
+        this->storeRegister(REG_ESI,irbuilder, irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a2, pt)));
+        this->storeRegister(REG_EBP,irbuilder, irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a3, pt)));
+        // this->storeRegister(REG_ESP,irbuilder, irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a4, pt)));
+        this->storeRegister(REG_EBX,irbuilder, irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a5, pt)));
+        this->storeRegister(REG_EDX,irbuilder, irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a6, pt)));
+        this->storeRegister(REG_ECX,irbuilder, irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a7, pt)));
+        this->storeRegister(REG_EAX,irbuilder, irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a8, pt)));
+        this->storeRegister(REG_ESP, irbuilder, a9);
+        
+        irbuilder.CreateRet(irbuilder.getInt32(0));
+        this->popad = popad_function;
     }
 } // namespace genaytyk

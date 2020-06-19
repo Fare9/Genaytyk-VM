@@ -109,6 +109,9 @@ namespace genaytyk
          */
         void initializeRor(llvm::IRBuilder<>& irbuilder);
         void initializeRol(llvm::IRBuilder<>& irbuilder);
+
+        void initializePushad(llvm::IRBuilder<>& irbuilder);
+        void initializePopad(llvm::IRBuilder<>& irbuilder);
         //
         //==============================================================================
         // Load/store methods.
@@ -200,7 +203,10 @@ namespace genaytyk
         llvm::Value *translateRor(llvm::Value *l, llvm::Value *r, llvm::IRBuilder<> &irbuilder);
         llvm::Value *translateRol(llvm::Value *l, llvm::Value *r, llvm::IRBuilder<> &irbuilder);
 
-
+        void translatePushad(llvm::IRBuilder<> &irbuilder);
+        void translatePopad(llvm::IRBuilder<> &irbuilder);
+        void translatePush(llvm::Value *val, llvm::IRBuilder<> &irbuilder);
+        llvm::Value *translatePop(llvm::IRBuilder<> &irbuilder);
         //
         //==============================================================================
         // Genaytyk branching instruction translation methods.
@@ -240,6 +246,8 @@ namespace genaytyk
 
         llvm::Function *ror_function = nullptr;
         llvm::Function *rol_function = nullptr;
+        llvm::Function *pushad = nullptr;
+        llvm::Function *popad = nullptr;
         /// For obtaining name of a register given
         /// its register number, these number are
         /// part of genaytyk VM, and structure will
