@@ -9,7 +9,9 @@ namespace genaytyk
 {
     namespace disassembler
     {
-
+        /// definition of the instructions supported by
+        /// Genaytyk VM, each enumator correspond to the
+        /// instruction opcode.
         typedef enum _instructions
         {
             MOV = 1,
@@ -44,6 +46,7 @@ namespace genaytyk
             ERROR
         } instructions;
 
+        /// Genaytyk type of operands
         typedef enum _opcode_types
         {
             IMMEDIATE = 0x49,
@@ -52,6 +55,9 @@ namespace genaytyk
             REGISTER = 0x52
         } opcode_types;
 
+        /// States for the disassember
+        /// extracted from the first version
+        /// of the disassembler.
         typedef enum _states
         {
             SETUP = 0,
@@ -109,6 +115,11 @@ namespace genaytyk
             /// value, we always return an uint32_t
             uint32_t getImmediateValue(uint8_t sizeOfImmediate);
 
+            /// Get all the offsets where to jump
+            /// this is the same pass than the disassembler
+            /// but will take only offsets of jumps to create
+            /// later basic blocks.
+            void get_jump_address(llvm::IRBuilder<> &irbuilder);
         private:
             llvm::Module* module;
             /// pointer to buffer with code
@@ -138,6 +149,8 @@ namespace genaytyk
             /// also it will allow to check if a jumps
             /// forward basic block is already created
             std::map<uint32_t, llvm::BasicBlock *> addr2llvmbb;
+
+            std::vector<uint32_t> basic_block_addresses;
 
             /// Necessary for instructions, structs with
             /// the operand types and registers

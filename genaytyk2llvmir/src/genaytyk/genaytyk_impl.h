@@ -24,6 +24,9 @@
 namespace genaytyk
 {
 
+    /// enum type for genaytyk registers
+    /// names are only same to x86
+    /// registers, but are not x86 registers
     typedef enum registers
     {
         REG_EIP,
@@ -71,7 +74,12 @@ namespace genaytyk
         //==============================================================================
         //
 
+        /**
+         * Initializer method. It calls different initializer methods that
+         * need an IRBuilder
+         */
         void initialize(llvm::IRBuilder<>& irbuilder);
+
         /**
 		 * Initialize @c _reg2name. See comment for @c _reg2name to know what
 		 * must be initialized, and what may or may not be initialized.
@@ -96,22 +104,31 @@ namespace genaytyk
          */
         void initializeRegLlvmMap();
 
+        /**
+         * Initialize @ reg2parentMap. See comment for @c reg2parentMap to know what
+         * must be initialized, and what may or may not be initialized.
+         */
         void initializeRegistersParentMapToOther(
             const std::vector<genaytyk_reg>& rs,
 		    genaytyk_reg other);
 
         void initializeRegistersParentMap32();
 
-        void initializeFunctions(llvm::IRBuilder<>& irbuilder);
         /**
-         * Initialize function of ror and rol to avoid masive code
-         * when this instructions are used
+         * Initializer of different methods that are used as assembly instructions
+         * for not being implemented in LLVM IR
+         */
+        void initializeFunctions(llvm::IRBuilder<>& irbuilder);
+
+        /**
+         * Initialize function of ror, rol, pushad and popad 
+         * to avoid masive code when this instructions are used
          */
         void initializeRor(llvm::IRBuilder<>& irbuilder);
         void initializeRol(llvm::IRBuilder<>& irbuilder);
-
         void initializePushad(llvm::IRBuilder<>& irbuilder);
         void initializePopad(llvm::IRBuilder<>& irbuilder);
+
         //
         //==============================================================================
         // Load/store methods.
@@ -207,6 +224,7 @@ namespace genaytyk
         void translatePopad(llvm::IRBuilder<> &irbuilder);
         void translatePush(llvm::Value *val, llvm::IRBuilder<> &irbuilder);
         llvm::Value *translatePop(llvm::IRBuilder<> &irbuilder);
+
         //
         //==============================================================================
         // Genaytyk branching instruction translation methods.
@@ -227,23 +245,41 @@ namespace genaytyk
         // getters
         //==============================================================================
         //
+
+        /**
+         * Method to get a pointer to a buffer, this pointer must be translated to
+         * the necessary destination type as LLVM IR is strongly typed.
+         */
         llvm::Value* getPointerFromAddress(
             llvm::IRBuilder<> irbuilder,      // ir builder
             llvm::Type* array_type,         // memory array type
             llvm::Value* base,              // base of memory address
-            llvm::Value* offset             // offset to access
+            llvm::Value* offset,             // offset to access
+            llvm::Type* dest_type          // destination type
         );
 
         llvm::GlobalVariable *getRegister(uint32_t r);
         llvm::Type *getRegisterType(uint32_t r);
         uint32_t getParentRegister(uint32_t r);
 
+        //
+        //==============================================================================
+        // Utilities
+        //==============================================================================
+        //
+
+        /**
+         * Method to extent zeroes or trunk values from one type
+         * to the other
+         */
+        llvm::Value* generateTypeConversion(llvm::IRBuilder<>& irb, llvm::Value* from, llvm::Type* to);
+
     private:
         llvm::Module *module = nullptr;
-        llvm::GlobalVariable *glovalVariable = nullptr;
-        llvm::Function *callFunction = nullptr;
 
-
+        /// Variables to store the functions that
+        /// translate to unexisting instructions
+        /// in LLVM IR
         llvm::Function *ror_function = nullptr;
         llvm::Function *rol_function = nullptr;
         llvm::Function *pushad = nullptr;

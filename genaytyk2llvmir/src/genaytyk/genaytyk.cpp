@@ -32,7 +32,7 @@ namespace genaytyk
 
         this->module->getOrInsertGlobal(name, type);
         gVar = this->module->getNamedGlobal(name);
-        gVar->setLinkage(llvm::GlobalValue::CommonLinkage);
+        gVar->setLinkage(llvm::GlobalValue::PrivateLinkage);
         gVar->setAlignment(4);
 
         return gVar;
@@ -98,10 +98,10 @@ namespace genaytyk
                 ret = irbuilder.CreateLShr(ret, 8);
             }
 
-            ret = irbuilder.CreateTrunc(reg, reg_type);
+            ret = irbuilder.CreateTrunc(ret, reg_type);
         }
 
-        ret = irbuilder.CreateZExtOrTrunc(reg, dstType);
+        ret = generateTypeConversion(irbuilder, ret, dstType);
 
         return ret;
     }
@@ -148,7 +148,7 @@ namespace genaytyk
             }
         }
 
-        val = irbuilder.CreateZExtOrTrunc(val, reg_type);
+        val = generateTypeConversion(irbuilder, val, reg->getValueType());
 
         // now check in which register is going to store
         if (reg_ == parent_reg) // if it's the parent reg, store is simple
@@ -285,12 +285,23 @@ namespace genaytyk
 
     llvm::Value *GenaytykLlvmIrTranslatorGenaytyk_impl::translateInc(llvm::Value *v, llvm::IRBuilder<> &irbuilder)
     {
-        return irbuilder.CreateAdd(v, irbuilder.getInt32(1));
+
+        if (v->getType()->isIntegerTy(8))
+            return irbuilder.CreateAdd(v, irbuilder.getInt8(1));
+        else if (v->getType()->isIntegerTy(16))
+            return irbuilder.CreateAdd(v, irbuilder.getInt16(1));
+        else
+            return irbuilder.CreateAdd(v, irbuilder.getInt32(1));
     }
 
     llvm::Value *GenaytykLlvmIrTranslatorGenaytyk_impl::translateDec(llvm::Value *v, llvm::IRBuilder<> &irbuilder)
     {
-        return irbuilder.CreateSub(v, irbuilder.getInt32(1));
+        if (v->getType()->isIntegerTy(8))
+            return irbuilder.CreateSub(v, irbuilder.getInt8(1));
+        else if (v->getType()->isIntegerTy(16))
+            return irbuilder.CreateSub(v, irbuilder.getInt16(1));
+        else
+            return irbuilder.CreateSub(v, irbuilder.getInt32(1));
     }
 
     llvm::Value *GenaytykLlvmIrTranslatorGenaytyk_impl::translateNot(llvm::Value *v, llvm::IRBuilder<> &irbuilder)
@@ -336,12 +347,12 @@ namespace genaytyk
 
     void GenaytykLlvmIrTranslatorGenaytyk_impl::translatePush(llvm::Value *val, llvm::IRBuilder<> &irbuilder)
     {
-        auto* pt = llvm::PointerType::get(irbuilder.getInt32Ty(), 0);
-        auto* sp = this->getRegister(REG_ESP);
-        llvm::Value* c = irbuilder.getInt32(-4);
+        auto *pt = llvm::PointerType::get(irbuilder.getInt32Ty(), 0);
+        auto *sp = this->loadRegister(REG_ESP, irbuilder, this->getRegisterType(REG_ESP));
+        llvm::Value *c = irbuilder.getInt32(-4);
 
-        auto* a0 = sp;
-        auto* a1 = irbuilder.CreateAdd(a0, c);
+        auto *a0 = sp;
+        auto *a1 = irbuilder.CreateAdd(a0, c);
 
         irbuilder.CreateStore(val, irbuilder.CreateIntToPtr(a1, pt));
         this->storeRegister(REG_ESP, irbuilder, a1);
@@ -349,16 +360,16 @@ namespace genaytyk
 
     llvm::Value *GenaytykLlvmIrTranslatorGenaytyk_impl::translatePop(llvm::IRBuilder<> &irbuilder)
     {
-        auto* pt = llvm::PointerType::get(irbuilder.getInt32Ty(), 0);
-        auto* sp = this->getRegister(REG_ESP);
-        llvm::Value* c = irbuilder.getInt32(4);
+        auto *pt = llvm::PointerType::get(irbuilder.getInt32Ty(), 0);
+        auto *sp = this->loadRegister(REG_ESP, irbuilder, this->getRegisterType(REG_ESP));
+        llvm::Value *c = irbuilder.getInt32(4);
 
-        auto* a1 = sp;
-        auto* a2 = irbuilder.CreateAdd(a1, c);
+        auto *a1 = sp;
+        auto *a2 = irbuilder.CreateAdd(a1, c);
 
-        llvm::Value* ret = irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a1, pt));
+        llvm::Value *ret = irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a1, pt));
         this->storeRegister(REG_ESP, irbuilder, a2);
-        
+
         return ret;
     }
     //
@@ -373,7 +384,7 @@ namespace genaytyk
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJZ(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value* jz_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_EQ, l, r), "ifcond");
+        llvm::Value *jz_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_EQ, l, r), "ifcond");
 
         return irbuilder.CreateCondBr(jz_condition, destination, next_addr);
     }
@@ -387,28 +398,28 @@ namespace genaytyk
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJA(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value* ja_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_UGT, l, r), "ifcond");
+        llvm::Value *ja_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_UGT, l, r), "ifcond");
 
         return irbuilder.CreateCondBr(ja_condition, destination, next_addr);
     }
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJB(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value* jb_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_ULT, l, r), "ifcond");
+        llvm::Value *jb_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_ULT, l, r), "ifcond");
 
         return irbuilder.CreateCondBr(jb_condition, destination, next_addr);
     }
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJNB(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value* jnb_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_UGE, l, r), "ifcond"); // jnb == jae
+        llvm::Value *jnb_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_UGE, l, r), "ifcond"); // jnb == jae
 
         return irbuilder.CreateCondBr(jnb_condition, destination, next_addr);
     }
 
     llvm::BranchInst *GenaytykLlvmIrTranslatorGenaytyk_impl::translateCreateJBE(llvm::Value *l, llvm::Value *r, llvm::BasicBlock *destination, llvm::BasicBlock *next_addr, llvm::IRBuilder<> &irbuilder)
     {
-        llvm::Value* jbe_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_ULE, l, r), "ifcond");
+        llvm::Value *jbe_condition = irbuilder.Insert(new llvm::ICmpInst(llvm::ICmpInst::ICMP_ULE, l, r), "ifcond");
 
         return irbuilder.CreateCondBr(jbe_condition, destination, next_addr);
     }
@@ -422,12 +433,14 @@ namespace genaytyk
     // getters
     //==============================================================================
     //
-    llvm::Value *GenaytykLlvmIrTranslatorGenaytyk_impl::getPointerFromAddress(llvm::IRBuilder<> irbuilder, llvm::Type *array_type, llvm::Value *base, llvm::Value *offset)
+    llvm::Value *GenaytykLlvmIrTranslatorGenaytyk_impl::getPointerFromAddress(llvm::IRBuilder<> irbuilder, llvm::Type *array_type, llvm::Value *base, llvm::Value *offset, llvm::Type* dest_type)
     {
-        return irbuilder.CreateGEP(
+        llvm::Value *gep = irbuilder.CreateGEP(
             array_type,
             base,
             offset);
+
+        return irbuilder.CreateBitCast(gep, dest_type);
     }
 
     llvm::GlobalVariable *GenaytykLlvmIrTranslatorGenaytyk_impl::getRegister(uint32_t r)
@@ -454,4 +467,39 @@ namespace genaytyk
                    : r;
     }
 
+    //
+    //==============================================================================
+    // Utilities
+    //==============================================================================
+    //
+    llvm::Value *GenaytykLlvmIrTranslatorGenaytyk_impl::generateTypeConversion(llvm::IRBuilder<> &irb,
+                                                                               llvm::Value *from,
+                                                                               llvm::Type *to)
+    {
+        if (to == nullptr || from->getType() == to)
+        {
+            return from;
+        }
+
+        llvm::Value *ret = nullptr;
+
+        if (!to->isIntegerTy())
+        {
+            throw Genaytyk_Exception("Invalid combination of conversion method and destination type");
+        }
+
+        if (from->getType()->isIntegerTy())
+        {
+            ret = irb.CreateZExtOrTrunc(from, to);
+        }
+        else
+        {
+            auto size = this->module->getDataLayout().getTypeStoreSizeInBits(from->getType());
+            auto intTy = irb.getIntNTy(size);
+            ret = irb.CreateBitCast(from, intTy);
+            ret = irb.CreateZExtOrTrunc(ret, to);
+        }
+
+        return ret;
+    }
 } // namespace genaytyk

@@ -139,7 +139,17 @@ namespace genaytyk
                 {REG_BP, this->translateCreateGlobal(this->reg2type[REG_BP], this->reg2name[REG_BP])},
                 {REG_DI, this->translateCreateGlobal(this->reg2type[REG_DI], this->reg2name[REG_DI])},
                 {REG_SI, this->translateCreateGlobal(this->reg2type[REG_SI], this->reg2name[REG_SI])}};
-
+        
+        // initialize the registers
+        
+        for (uint32_t i = REG_EIP; i <= REG_SI; i++)
+        {
+            unsigned int bitwidth = this->reg2type[i]->getIntegerBitWidth();
+            r2l[i]->setAlignment(bitwidth / 8); // set alignment of global variable
+            llvm::ConstantInt* const_int_val = llvm::ConstantInt::get(this->module->getContext(), llvm::APInt(bitwidth,0));
+            r2l[i]->setInitializer(const_int_val);
+        }
+        
         this->GenaytykRegs2Llvm = std::move(r2l);
     }
 
@@ -253,7 +263,9 @@ namespace genaytyk
     {
         // create vector for arguments
         // this will be 2 integers
-        std::vector<llvm::Type *> integers(funArgs.size(), llvm::Type::getInt32Ty(this->module->getContext()));
+        std::vector<llvm::Type *> integers;
+        integers.push_back(llvm::Type::getInt32Ty(this->module->getContext()));
+        integers.push_back(llvm::Type::getInt32Ty(this->module->getContext()));
 
         llvm::FunctionType *funcType = llvm::FunctionType::get(
             /*Type=*/llvm::IntegerType::getInt32Ty(this->module->getContext()), // return type (int 32)
@@ -304,7 +316,9 @@ namespace genaytyk
     {
         // create vector for arguments
         // this will be 2 integers
-        std::vector<llvm::Type *> integers(funArgs.size(), llvm::Type::getInt32Ty(this->module->getContext()));
+        std::vector<llvm::Type *> integers;
+        integers.push_back(llvm::Type::getInt32Ty(this->module->getContext()));
+        integers.push_back(llvm::Type::getInt32Ty(this->module->getContext()));
 
         llvm::FunctionType *funcType = llvm::FunctionType::get(
             /*Type=*/llvm::IntegerType::getInt32Ty(this->module->getContext()), // return type (int 32)
@@ -353,10 +367,10 @@ namespace genaytyk
 
     void GenaytykLlvmIrTranslatorGenaytyk_impl::initializePushad(llvm::IRBuilder<>& irbuilder)
     {
-
+ 
         llvm::FunctionType *funcType = llvm::FunctionType::get(
-            /*Type=*/irbuilder.getVoidTy(), // return type (int 32)
-            /*Params=*/irbuilder.getVoidTy(),
+            /*Type=*/irbuilder.getVoidTy(),
+            /*Params=*/{},
             /*isVarArg=*/false);
 
         auto *pushad_function = llvm::Function::Create(
@@ -373,7 +387,7 @@ namespace genaytyk
         irbuilder.SetInsertPoint(entry);
 
         auto* pt = llvm::PointerType::get(irbuilder.getInt32Ty(), 0);
-        auto* sp = this->getRegister(REG_ESP);
+        auto* sp = this->loadRegister(REG_ESP, irbuilder, this->getRegisterType(REG_ESP));
         llvm::Value* c = irbuilder.getInt32(-4);
 
         // code from retdec for x86
@@ -387,18 +401,19 @@ namespace genaytyk
         auto* a7 = irbuilder.CreateAdd(a6, c);
         auto* a8 = irbuilder.CreateAdd(a7, c);
 
-        irbuilder.CreateStore(this->getRegister(REG_EAX), irbuilder.CreateIntToPtr(a1, pt));
-        irbuilder.CreateStore(this->getRegister(REG_ECX), irbuilder.CreateIntToPtr(a2, pt));
-        irbuilder.CreateStore(this->getRegister(REG_EDX), irbuilder.CreateIntToPtr(a3, pt));
-        irbuilder.CreateStore(this->getRegister(REG_EBX), irbuilder.CreateIntToPtr(a4, pt));
-        irbuilder.CreateStore(this->getRegister(REG_ESP), irbuilder.CreateIntToPtr(a5, pt));
-        irbuilder.CreateStore(this->getRegister(REG_EBP), irbuilder.CreateIntToPtr(a6, pt));
-        irbuilder.CreateStore(this->getRegister(REG_ESI), irbuilder.CreateIntToPtr(a7, pt));
-        irbuilder.CreateStore(this->getRegister(REG_EDI), irbuilder.CreateIntToPtr(a8, pt));
+        irbuilder.CreateStore(this->loadRegister(REG_EAX, irbuilder, this->reg2type[REG_EAX]), irbuilder.CreateIntToPtr(a1, pt));
+        irbuilder.CreateStore(this->loadRegister(REG_ECX, irbuilder, this->reg2type[REG_ECX]), irbuilder.CreateIntToPtr(a2, pt));
+        irbuilder.CreateStore(this->loadRegister(REG_EDX, irbuilder, this->reg2type[REG_EDX]), irbuilder.CreateIntToPtr(a3, pt));
+        irbuilder.CreateStore(this->loadRegister(REG_EBX, irbuilder, this->reg2type[REG_EBX]), irbuilder.CreateIntToPtr(a4, pt));
+        irbuilder.CreateStore(this->loadRegister(REG_ESP, irbuilder, this->reg2type[REG_ESP]), irbuilder.CreateIntToPtr(a5, pt));
+        irbuilder.CreateStore(this->loadRegister(REG_EBP, irbuilder, this->reg2type[REG_EBP]), irbuilder.CreateIntToPtr(a6, pt));
+        irbuilder.CreateStore(this->loadRegister(REG_ESI, irbuilder, this->reg2type[REG_ESI]), irbuilder.CreateIntToPtr(a7, pt));
+        irbuilder.CreateStore(this->loadRegister(REG_EDI, irbuilder, this->reg2type[REG_EDI]), irbuilder.CreateIntToPtr(a8, pt));
+
         this->storeRegister(REG_ESP, irbuilder, a8);
         
         
-        irbuilder.CreateRet(irbuilder.getInt32(0));
+        irbuilder.CreateRet(nullptr);
         this->pushad = pushad_function;
     }
 
@@ -406,7 +421,7 @@ namespace genaytyk
     {
         llvm::FunctionType *funcType = llvm::FunctionType::get(
             /*Type=*/irbuilder.getVoidTy(), // return type (int 32)
-            /*Params=*/irbuilder.getVoidTy(),
+            /*Params=*/{},
             /*isVarArg=*/false);
 
         auto *popad_function = llvm::Function::Create(
@@ -423,7 +438,7 @@ namespace genaytyk
         irbuilder.SetInsertPoint(entry);
 
         auto* pt = llvm::PointerType::get(irbuilder.getInt32Ty(), 0);
-        auto* sp = this->getRegister(REG_ESP);
+        auto* sp = this->loadRegister(REG_ESP, irbuilder, this->getRegisterType(REG_ESP));
         llvm::Value* c = irbuilder.getInt32(4);
 
         // code from retdec for x86
@@ -447,7 +462,7 @@ namespace genaytyk
         this->storeRegister(REG_EAX,irbuilder, irbuilder.CreateLoad(irbuilder.CreateIntToPtr(a8, pt)));
         this->storeRegister(REG_ESP, irbuilder, a9);
         
-        irbuilder.CreateRet(irbuilder.getInt32(0));
+        irbuilder.CreateRet(nullptr);
         this->popad = popad_function;
     }
 } // namespace genaytyk
